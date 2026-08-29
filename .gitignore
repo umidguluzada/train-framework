@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+native_modules/train_scanner
+native_modules/train_sniffer
+native_modules/go.sum
+native_modules/go.mod
+.env
