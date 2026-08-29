@@ -11,263 +11,266 @@ Threat Response & Automated Intelligence Network
 
 # TRAIN Framework
 
-**TRAIN** (Threat Response & Automated Intelligence Network) — Python, C++
-və Go dillərini birləşdirən, modulyar arxitekturalı, All-in-One **Purple
-Team** (Dual-Use: Red Team + Blue Team) kibertəhlükəsizlik CLI alətidir.
-Şəbəkə kəşfiyyatından tutmuş, IDS/IPS-ə, web auditinə, CVE axtarışına,
-compliance yoxlamasına, log korrelyasiyasına, MITRE ATT&CK
-xəritələndirilməsinə, OSINT/geolokasiyaya, ikili fayl forensikasına,
-şifrəli parol anbarına və fişinq təlim modelinə qədər — bütün bunlar tək
-bir interaktiv terminal interfeysində (TUI) birləşdirilib.
+**TRAIN** (Threat Response & Automated Intelligence Network) is a modular,
+All-in-One **Purple Team** (Dual-Use: Red Team + Blue Team) cybersecurity
+CLI tool combining Python, C++, and Go. It brings together network
+recon, IDS/IPS, web auditing, CVE lookup, compliance checking, log
+correlation, MITRE ATT&CK mapping, OSINT/geolocation, binary forensics, an
+encrypted secrets vault, and phishing-awareness training — all inside a
+single interactive terminal interface (TUI).
 
-> ⚠️ **Etik istifadə:** Bu alət yalnız öz sisteminizdə, öz laboratoriya
-> mühitinizdə (VirtualBox/VMware lab) və ya yazılı icazəniz olan
-> sistemlərdə istifadə üçün nəzərdə tutulub. İcazəsiz sistemlərə qarşı
-> istifadəsi qanunsuzdur.
+![TUI Banner](docs/screenshots/banner.png)
 
----
-
-## 📋 Mündəricat
-
-- [Xüsusiyyətlər](#-xüsusiyyətlər)
-- [Arxitektura](#-arxitektura)
-- [Quraşdırma](#-quraşdırma)
-- [Əmr Bələdçisi](#-əmr-bələdçisi)
-  - [Nüvə əmrləri](#nüvə-əmrləri)
-  - [Şəbəkə kəşfiyyatı və IDS/IPS](#şəbəkə-kəşfiyyatı-və-idsips)
-  - [Web audit](#web-audit)
-  - [Zəiflik və uyğunluq auditi](#zəiflik-və-uyğunluq-auditi)
-  - [Log analizi və threat hunting](#log-analizi-və-threat-hunting)
-  - [OSINT və reputasiya](#osint-və-reputasiya)
-  - [Binary forensika](#binary-forensika)
-  - [Parol və şifrələmə](#parol-və-şifrələmə)
-  - [Fişinq təlimi](#fişinq-təlimi)
-- [Ekran görüntüləri](#-ekran-görüntüləri)
-- [Layihə strukturu](#-layihə-strukturu)
-- [Töhfə vermə](#-töhfə-vermə)
+> ⚠️ **Ethical use only:** This tool is intended for use against your own
+> systems, your own lab environment (VirtualBox/VMware lab), or systems
+> you have explicit written authorization to test. Using it against
+> systems without permission is illegal.
 
 ---
 
-## ✨ Xüsusiyyətlər
+## 📋 Table of Contents
 
-| Modul | Dil | Nə edir |
+- [Features](#-features)
+- [Architecture](#-architecture)
+- [Installation](#-installation)
+- [Command Reference](#-command-reference)
+  - [Core commands](#core-commands)
+  - [Network recon & IDS/IPS](#network-recon--idsips)
+  - [Web auditing](#web-auditing)
+  - [Vulnerability & compliance auditing](#vulnerability--compliance-auditing)
+  - [Log analysis & threat hunting](#log-analysis--threat-hunting)
+  - [OSINT & reputation](#osint--reputation)
+  - [Binary forensics](#binary-forensics)
+  - [Passwords & encryption](#passwords--encryption)
+  - [Phishing awareness training](#phishing-awareness-training)
+- [Screenshots](#-screenshots)
+- [Project Structure](#-project-structure)
+- [Contributing](#-contributing)
+
+---
+
+## ✨ Features
+
+| Module | Language | What it does |
 |---|---|---|
-| `scanner.cpp` | C++ | Çoxaxınlı TCP port skaneri + banner grabbing |
-| `sniffer.go` | Go | libpcap-əsaslı Snort-tipli IDS/IPS mühərriki |
-| `web_auditor.py` | Python | HTTP header/TLS/misconfig auditi + yerli proxy |
-| `script_engine.py` | Python | TSE — FTP/SSH/HTTP/MySQL/PostgreSQL/MongoDB/Redis audit skriptləri |
-| `cve_lookup.py` | Python | NVD API-dən CVE axtarışı + YAML şablon skaneri |
-| `compliance.py` | Python | CIS Benchmark-tipli sistem uyğunluq auditi |
-| `log_engine.py` | Python | SSH/nginx/PowerShell/LSASS log korrelyasiyası |
-| `threat_hunter.py` | Python | MITRE ATT&CK xəritələndirilməsi + C2 beaconing aşkarlanması |
-| `osint_auditor.py` | Python | DNS enum, geolokasiya/ASN, VirusTotal reputasiyası |
-| `api_tester.py` | Python | REST API test və endpoint kəşfiyyatı |
-| `binary_analyzer.py` | Python | PE/ELF statik forensika (header, section, entropiya) |
-| `pass_auditor.py` | Python | Parol entropiyası + HaveIBeenPwned yoxlaması |
-| `vault_manager.py` | Python | AES-256 şifrəli lokal parol/qeyd anbarı |
-| `crypto_utils.py` | Python | Base64/Hex/URL encode-decode + hash |
-| `phish_awareness.py` | Python | 44 nümunə ilə interaktiv fişinq tanıma təlimi (4 çətinlik səviyyəsi) |
+| `scanner.cpp` | C++ | Multi-threaded TCP port scanner + banner grabbing |
+| `sniffer.go` | Go | libpcap-based, Snort-style IDS/IPS engine |
+| `web_auditor.py` | Python | HTTP header/TLS/misconfig auditing + local forwarding proxy |
+| `script_engine.py` | Python | TSE — FTP/SSH/HTTP/MySQL/PostgreSQL/MongoDB/Redis audit checks |
+| `cve_lookup.py` | Python | NVD API CVE lookup + YAML template scanner |
+| `compliance.py` | Python | CIS Benchmark-inspired local system compliance audit |
+| `log_engine.py` | Python | SSH/nginx/PowerShell/LSASS log correlation |
+| `threat_hunter.py` | Python | MITRE ATT&CK mapping + C2 beaconing detection |
+| `osint_auditor.py` | Python | DNS enumeration, geolocation/ASN lookup, VirusTotal reputation |
+| `api_tester.py` | Python | REST API testing and endpoint discovery |
+| `binary_analyzer.py` | Python | Static PE/ELF forensics (headers, sections, entropy) |
+| `pass_auditor.py` | Python | Password entropy + HaveIBeenPwned breach check |
+| `vault_manager.py` | Python | AES-256 encrypted local secrets vault |
+| `crypto_utils.py` | Python | Base64/Hex/URL encode-decode + hashing |
+| `phish_awareness.py` | Python | Interactive phishing-recognition training with 44 examples across 4 difficulty levels |
 
 ---
 
-## 🏗 Arxitektura
+## 🏗 Architecture
 
 ```
                     ┌─────────────────────┐
-                    │   main.py (giriş)    │
+                    │   main.py (entry)     │
                     └──────────┬───────────┘
                                │
                     ┌──────────▼───────────┐
                     │  core/tui_engine.py   │  ← Rich/Prompt_Toolkit TUI
-                    │  (əmr registry)        │
+                    │  (command registry)    │
                     └──────────┬───────────┘
                                │
               ┌────────────────┼────────────────┐
               │                │                 │
     ┌─────────▼──────┐ ┌───────▼────────┐ ┌──────▼───────┐
     │  core/bridge.py │ │ modules/*.py    │ │ native_modules│
-    │  (Python↔native)│ │ (14 Python      │ │ (C++ / Go)    │
-    │                 │ │  modulu)         │ │               │
+    │  (Python↔native)│ │ (13 Python      │ │ (C++ / Go)    │
+    │                 │ │  modules)        │ │               │
     └─────────┬──────┘ └────────────────┘ └──────┬────────┘
               │                                    │
               └──────────── subprocess + JSON ──────┘
 ```
 
-Python TUI mərkəzi idarəetməni edir; C++ (`scanner.cpp`) və Go
-(`sniffer.go`) modulları ayrıca binary kimi kompilyasiya olunur və
-`core/bridge.py` vasitəsilə subprocess olaraq çağırılır, nəticələr JSON
-formatında geri ötürülür.
+The Python TUI handles central orchestration; the C++ (`scanner.cpp`) and
+Go (`sniffer.go`) modules are compiled as separate binaries and invoked
+as subprocesses through `core/bridge.py`, with results returned as JSON.
 
 ---
 
-## 🚀 Quraşdırma
+## 🚀 Installation
 
-### Tələblər
-- Linux (Kali / Ubuntu / Debian tövsiyə olunur) və ya WSL2
+### Requirements
+- Linux (Kali / Ubuntu / Debian recommended) or WSL2
 - Python 3.10+
-- `g++` (C++17 dəstəyi ilə)
+- `g++` (with C++17 support)
 - Go 1.20+
 - `libpcap-dev`
 
-### Addımlar
+### Steps
 
 ```bash
-# 1. Repo-nu klonla
+# 1. Clone the repo
 git clone https://github.com/umidguluzada/train-framework.git
 cd train-framework
 
-# 2. Sistem asılılıqlarını quraşdır
+# 2. Install system dependencies
 sudo apt update
 sudo apt install -y build-essential golang-go libpcap-dev redis-server
 
-# 3. Python asılılıqlarını quraşdır
+# 3. Install Python dependencies
 pip install -r requirements.txt --break-system-packages
 
-# 4. C++ port skanerini kompilyasiya et
+# 4. Compile the C++ port scanner
 cd native_modules
 g++ -std=c++17 -O2 -pthread scanner.cpp -o train_scanner
 
-# 5. Go IDS/IPS mühərrikini kompilyasiya et
+# 5. Compile the Go IDS/IPS engine
 go mod init train_sniffer
 go get github.com/google/gopacket
 go build -o train_sniffer sniffer.go
 cd ..
 
-# 6. İşə sal
+# 6. Run it
 python3 main.py
 ```
 
-> IDS/IPS (`sniff`/`ids-run`) canlı paket tutmaq üçün root icazəsi tələb
-> edir: `sudo python3 main.py`.
+> IDS/IPS (`sniff`/`ids-run`) requires root privileges to capture live
+> packets: `sudo python3 main.py`.
 
 ---
 
-## 📖 Əmr Bələdçisi
+## 📖 Command Reference
 
-### Nüvə əmrləri
+### Core commands
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `set target <IP/URL>` | Cari sessiya üçün hədəfi təyin edir. Digər əmrlərin çoxu, ayrıca hədəf verilməsə, bu dəyəri istifadə edir. |
-| `status` | Cari sessiya vəziyyətini (hədəf, verbose rejimi) göstərir. |
-| `help` | Bütün əmrlərin siyahısını göstərir. |
-| `exit` / `quit` | Proqramdan çıxır. |
+| `set target <IP/URL>` | Sets the target for the current session. Most other commands fall back to this value if no target is given directly. |
+| `status` | Shows the current session state (target, verbose mode). |
+| `help` | Lists all available commands. |
+| `exit` / `quit` | Exits the program. |
 
-### Şəbəkə kəşfiyyatı və IDS/IPS
+### Network recon & IDS/IPS
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `scan [start] [end]` | C++ çoxaxınlı port skaneri. Açıq portları, servis təxminini və banner-i göstərir. Məs: `scan 1 1024`. |
-| `sniff <iface> [rules] [--ips]` | Go IDS/IPS mühərrikini işə salır. `rules.conf`-dakı Snort-tipli qaydalara uyğun canlı paketləri aşkarlayır. `--ips` verilsə, uyğun gələn mənbə IP-ni `iptables` ilə bloklayır. Məs: `sniff eth0 native_modules/rules.conf`. |
-| `ids-run` | `sniff` əmrinin sinonimidir. |
+| `scan [start] [end]` | Multi-threaded C++ port scanner. Shows open ports, a service guess, and a banner. E.g. `scan 1 1024`. |
+| `sniff <iface> [rules] [--ips]` | Starts the Go IDS/IPS engine. Matches live packets against Snort-style rules in `rules.conf`. With `--ips`, blocks the matching source IP via `iptables`. E.g. `sniff eth0 native_modules/rules.conf`. |
+| `ids-run` | Alias for `sniff`. |
 
-### Web audit
+### Web auditing
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `audit-web [url]` | HTTP təhlükəsizlik başlıqlarını (CSP, HSTS, X-Frame-Options və s.), TLS sertifikatını və tanınmış həssas yolları (`.git/config`, `.env`, `robots.txt` və s.) yoxlayır. |
-| `web-proxy [port]` | Yerli, yüngül HTTP forward proxy başladır (default port 8899). Bütün keçən sorğu/cavabları canlı loglayır. Məs: `curl -x http://127.0.0.1:8899 http://example.com`. |
-| `api-test <url>` | Tək bir API endpoint-ə GET+OPTIONS sorğusu göndərib status, icazə verilən metodları və cavab strukturunu göstərir. |
-| `api-discover <base_url>` | Ümumi API konvensiyalarına uyğun bir sıra yolu (`/api`, `/health`, `/swagger.json` və s.) yoxlayır. |
+| `audit-web [url]` | Checks HTTP security headers (CSP, HSTS, X-Frame-Options, etc.), TLS certificate details, and well-known sensitive paths (`.git/config`, `.env`, `robots.txt`, etc.). |
+| `web-proxy [port]` | Starts a lightweight local HTTP forwarding proxy (default port 8899). Logs every request/response passing through live. E.g. `curl -x http://127.0.0.1:8899 http://example.com`. |
+| `api-test <url>` | Sends a GET+OPTIONS probe to a single API endpoint and shows status, allowed methods, and response structure. |
+| `api-discover <base_url>` | Probes a set of common API path conventions (`/api`, `/health`, `/swagger.json`, etc.). |
 
-### Zəiflik və uyğunluq auditi
+### Vulnerability & compliance auditing
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `run-tse [portlar]` | TRAIN Scripting Engine — son `scan` nəticəsindəki (və ya əl ilə verilən) portlara uyğun audit yoxlamaları aparır: FTP anonim giriş, SSH banner/alqoritm, HTTP versiya açıqlanması, MySQL/PostgreSQL/MongoDB/Redis auth vəziyyəti. |
-| `audit-cve <açar sözlər>` | NVD (National Vulnerability Database) API-dən CVE axtarır. `audit-cve --from-tse` son TSE nəticəsindəki banner-lərə əsasən avtomatik axtarış edir. |
-| `template-scan <fayl.yaml>` | Yerli YAML şablonuna əsasən sadə HTTP-path yoxlamaları aparır (Nuclei-tipli, sadələşdirilmiş versiya). |
-| `audit-compliance` | Yerli sistemdə CIS Benchmark-tipli 7 yoxlama aparır: SSH root login, parol siyasəti, world-writable fayllar, firewall statusu, audit daemon statusu. |
+| `run-tse [ports]` | TRAIN Scripting Engine — runs audit checks against the ports found by the last `scan` (or given manually): FTP anonymous login, SSH banner/algorithms, HTTP version disclosure, MySQL/PostgreSQL/MongoDB/Redis auth status. |
+| `audit-cve <keywords>` | Searches the NVD (National Vulnerability Database) API for CVEs. `audit-cve --from-tse` auto-searches using banners from the last TSE run. |
+| `template-scan <file.yaml>` | Runs simple HTTP-path checks defined in a local YAML template (a simplified, Nuclei-style scanner). |
+| `audit-compliance` | Runs 7 CIS Benchmark-inspired checks on the local host: SSH root login, password policy, world-writable files, firewall status, audit daemon status. |
 
-### Log analizi və threat hunting
+### Log analysis & threat hunting
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `audit-logs <fayl> --format <növ>` | Log faylını parse edib strukturlaşdırılmış hadisələrə çevirir. Dəstəklənən formatlar: `auth` (SSH/sudo), `syslog`, `nginx` (HTTP access log), `json-alerts` (sniffer.go çıxışı), `powershell` (Windows Event ID 4104), `lsass` (Windows Event ID 4656/4663). Brute-force mənbələrini avtomatik aşkarlayır. |
-| `hunt-mitre` | Bu sessiyada toplanmış tapıntıları (compliance, TSE, log, IDS) real MITRE ATT&CK texnika ID-lərinə (T1110, T1548, T1078 və s.) xəritələndirir. |
-| `hunt-beacon` | Son `audit-logs --format nginx` nəticəsindəki zaman möhürlərini statistik təhlil edərək C2 "beaconing" (müntəzəm, avtomatlaşdırılmış əlaqə) nümunəsini aşkarlayır. |
+| `audit-logs <file> --format <type>` | Parses a log file into structured events. Supported formats: `auth` (SSH/sudo), `syslog`, `nginx` (HTTP access log), `json-alerts` (sniffer.go output), `powershell` (Windows Event ID 4104), `lsass` (Windows Event ID 4656/4663). Automatically flags brute-force sources. |
+| `hunt-mitre` | Maps findings gathered this session (compliance, TSE, logs, IDS) to real MITRE ATT&CK technique IDs (T1110, T1548, T1078, etc.). |
+| `hunt-beacon` | Statistically analyzes timestamps from the last `audit-logs --format nginx` run to detect C2 "beaconing" (regular, automated check-in) patterns. |
 
-### OSINT və reputasiya
+### OSINT & reputation
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `audit-osint <domain>` | Domenin DNS qeydlərini (A, AAAA, MX, TXT, NS, CNAME, SOA) passiv şəkildə toplayır. |
-| `geo-track <ip/domain>` | IP/domenin geolokasiyasını, ISP-ni və ASN-i göstərir (ip-api.com). |
-| `check-vt <hash/IP>` | VirusTotal v3 API ilə fayl hash-i və ya IP-nin reputasiyasını yoxlayır (`VT_API_KEY` mühit dəyişəni tələb olunur). |
+| `audit-osint <domain>` | Passively enumerates a domain's DNS records (A, AAAA, MX, TXT, NS, CNAME, SOA). |
+| `geo-track <ip/domain>` | Shows geolocation, ISP, and ASN for an IP/domain (via ip-api.com). |
+| `check-vt <hash/IP>` | Looks up a file hash or IP's reputation via the VirusTotal v3 API (requires the `VT_API_KEY` environment variable). |
 
-### Binary forensika
+### Binary forensics
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `analyze-binary <fayl>` | PE (Windows) və ya ELF (Linux) faylının başlığını, bölmələrini (sections), entropiyasını və import olunmuş funksiyalarını göstərir — heç bir icra olmadan statik analiz. |
+| `analyze-binary <file>` | Shows the headers, sections, entropy, and imported functions of a PE (Windows) or ELF (Linux) file — pure static analysis, no execution. |
 
-### Parol və şifrələmə
+### Passwords & encryption
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `audit-pass <parol> [--offline]` | Parolun entropiyasını (bit) hesablayır və HaveIBeenPwned k-anonymity API ilə məlum sızıntılarda olub-olmadığını yoxlayır (`--offline` şəbəkə sorğusunu ötürür). |
-| `vault-init` | Yeni AES-256 şifrəli lokal parol anbarı yaradır (master parol tələb olunur). |
-| `vault-add <ad>` | Anbara yeni bir dəyər (parol, API açarı və s.) əlavə edir. |
-| `vault-get <ad>` | Anbardan bir dəyəri deşifrə edib göstərir. |
-| `vault-list` | Anbardakı bütün qeyd adlarını göstərir (dəyərləri deşifrə etmədən). |
-| `vault-remove <ad>` | Anbardan bir qeydi silir. |
-| `encode <base64\|hex\|url> <mətn>` | Mətni verilən formata kodlaşdırır. |
-| `decode <base64\|hex\|url> <mətn>` | Kodlaşdırılmış mətni deşifrə edir. |
-| `hash <md5\|sha1\|sha256\|sha512> <mətn>` | Mətnin hash dəyərini hesablayır. |
+| `audit-pass <password> [--offline]` | Calculates password entropy (bits) and checks it against HaveIBeenPwned's k-anonymity API for known breaches (`--offline` skips the network lookup). |
+| `vault-init` | Creates a new AES-256 encrypted local secrets vault (prompts for a master password). |
+| `vault-add <name>` | Adds a new value (password, API key, etc.) to the vault. |
+| `vault-get <name>` | Decrypts and displays one value from the vault. |
+| `vault-list` | Lists all entry names in the vault (without decrypting values). |
+| `vault-remove <name>` | Removes an entry from the vault. |
+| `encode <base64\|hex\|url> <text>` | Encodes text into the given format. |
+| `decode <base64\|hex\|url> <text>` | Decodes encoded text. |
+| `hash <md5\|sha1\|sha256\|sha512> <text>` | Computes the hash of a given text. |
 
-### Fişinq təlimi
+### Phishing awareness training
 
-| Əmr | Təsvir |
+| Command | Description |
 |---|---|
-| `phish-awareness [səviyyə]` | Təsadüfi bir nümunə fişinq/real e-poçt göstərir və red flag-ləri izah edir. Səviyyə: `easy`, `medium`, `hard`, `critical` (default: hamısı). |
-| `phish-quiz [say] [səviyyə]` | İnteraktiv test — hər mesaj üçün "fişinq ya real?" sualı verir, nəticədə xal göstərir. Məs: `phish-quiz 10 hard`, `phish-quiz all critical`. |
+| `phish-awareness [level]` | Shows a random sample phishing/legitimate email and explains its red flags. Level: `easy`, `medium`, `hard`, `critical` (default: any). |
+| `phish-quiz [count] [level]` | Interactive quiz — for each message, asks "phishing or legit?" and scores you at the end. E.g. `phish-quiz 10 hard`, `phish-quiz all critical`. |
 
 ---
 
-## 🖼 Ekran görüntüləri
+## 🖼 Screenshots
 
-> Aşağıdakı şəkilləri öz test nəticələrinizdən əlavə edin — `docs/screenshots/`
-> qovluğuna PNG faylları qoyub, aşağıdakı linkləri fayl adlarınıza uyğun
-> yeniləyin.
-
-| Xüsusiyyət | Şəkil |
-|---|---|
-| TUI başlanğıc ekranı | `docs/screenshots/banner.png` |
-| Port skanı nəticəsi | `docs/screenshots/scan.png` |
-| Canlı IDS alert | `docs/screenshots/sniff.png` |
-| Web audit nəticəsi | `docs/screenshots/audit-web.png` |
-| Compliance auditi | `docs/screenshots/compliance.png` |
-| MITRE ATT&CK xəritələndirilməsi | `docs/screenshots/hunt-mitre.png` |
-| C2 Beacon aşkarlanması | `docs/screenshots/hunt-beacon.png` |
-| Fişinq testi | `docs/screenshots/phish-quiz.png` |
-
-```markdown
-![TUI Banner](docs/screenshots/banner.png)
+### `scan` — multi-threaded port scan with banner grabbing
 ![Port Scan](docs/screenshots/scan.png)
+
+### `sniff` — live IDS alert on an incoming SSH connection
 ![Live IDS Alert](docs/screenshots/sniff.png)
-```
+
+### `audit-web` — HTTP security header + sensitive path audit
+![Web Audit](docs/screenshots/audit-web.png)
+
+### `audit-compliance` — local CIS Benchmark-inspired checks
+![Compliance Audit](docs/screenshots/compliance.png)
+
+### `hunt-mitre` — findings mapped to MITRE ATT&CK techniques
+![MITRE ATT&CK Mapping](docs/screenshots/hunt-mitre.png)
+
+### `hunt-beacon` — statistical C2 beaconing detection
+![C2 Beacon Detection](docs/screenshots/hunt-beacon.png)
+
+### `phish-quiz` — interactive phishing-awareness quiz
+![Phishing Quiz](docs/screenshots/phish-quiz.png)
 
 ---
 
-## 📁 Layihə strukturu
+## 📁 Project Structure
 
 ```
 train_framework/
-├── main.py                      # Giriş nöqtəsi
-├── requirements.txt             # Python asılılıqları
-├── README.md                    # Bu fayl
+├── main.py                      # Entry point
+├── requirements.txt             # Python dependencies
+├── README.md                    # This file
 │
 ├── core/
-│   ├── tui_engine.py            # TUI, banner, əmr registry
-│   └── bridge.py                # Python ↔ C++/Go körpüsü
+│   ├── tui_engine.py            # TUI, banner, command registry
+│   └── bridge.py                # Python ↔ C++/Go bridge
 │
 ├── native_modules/
-│   ├── scanner.cpp              # C++ port skaneri
-│   ├── sniffer.go               # Go IDS/IPS mühərriki
-│   └── rules.conf               # Snort-tipli imza qaydaları
+│   ├── scanner.cpp              # C++ port scanner
+│   ├── sniffer.go               # Go IDS/IPS engine
+│   └── rules.conf               # Snort-style signature rules
 │
 ├── templates/
-│   └── example-template.yaml    # Nümunə YAML audit şablonu
+│   └── example-template.yaml    # Sample YAML audit template
+│
+├── docs/
+│   └── screenshots/              # README screenshots
 │
 └── modules/
     ├── web_auditor.py
@@ -287,12 +290,12 @@ train_framework/
 
 ---
 
-## 🤝 Töhfə vermə
+## 🤝 Contributing
 
-Bu, tədris/portfolio məqsədli şəxsi bir layihədir. Fikir və düzəlişlər üçün
-issue/PR açıla bilər.
+This is a personal project built for learning and portfolio purposes.
+Issues and pull requests with suggestions or fixes are welcome.
 
-## 📜 Lisenziya
+## 📜 License
 
-Bu layihə hazırda ayrıca lisenziya faylı olmadan paylaşılır — istifadədən
-əvvəl müəllif ilə əlaqə saxlayın.
+This project is licensed under the [MIT License](LICENSE) — see the
+`LICENSE` file for details.
