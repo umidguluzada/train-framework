@@ -43,6 +43,7 @@ single interactive terminal interface (TUI).
   - [Binary forensics](#binary-forensics)
   - [Passwords & encryption](#passwords--encryption)
   - [Phishing awareness training](#phishing-awareness-training)
+  - [Reporting](#reporting)
 - [Screenshots](#-screenshots)
 - [Project Structure](#-project-structure)
 - [Contributing](#-contributing)
@@ -68,6 +69,8 @@ single interactive terminal interface (TUI).
 | `vault_manager.py` | Python | AES-256 encrypted local secrets vault |
 | `crypto_utils.py` | Python | Base64/Hex/URL encode-decode + hashing |
 | `phish_awareness.py` | Python | Interactive phishing-recognition training with 44 examples across 4 difficulty levels |
+| `dir_brute.py` | Python | Web directory/file discovery (gobuster/dirb-style) |
+| `report_generator.py` | Python | Aggregates all session findings into a single HTML report |
 
 ---
 
@@ -169,6 +172,7 @@ python3 main.py
 | `web-proxy [port]` | Starts a lightweight local HTTP forwarding proxy (default port 8899). Logs every request/response passing through live. E.g. `curl -x http://127.0.0.1:8899 http://example.com`. |
 | `api-test <url>` | Sends a GET+OPTIONS probe to a single API endpoint and shows status, allowed methods, and response structure. |
 | `api-discover <base_url>` | Probes a set of common API path conventions (`/api`, `/health`, `/swagger.json`, etc.). |
+| `dir-brute <url> [wordlist] [--threads N] [--ext ext1,ext2]` | Web directory/file discovery (gobuster/dirb-style). Sends plain GET requests to a wordlist of candidate paths and reports which respond with something other than 404. Uses a built-in wordlist if none is given. E.g. `dir-brute http://target.local --ext php,bak`. |
 
 ### Vulnerability & compliance auditing
 
@@ -222,6 +226,12 @@ python3 main.py
 | `phish-awareness [level]` | Shows a random sample phishing/legitimate email and explains its red flags. Level: `easy`, `medium`, `hard`, `critical` (default: any). |
 | `phish-quiz [count] [level]` | Interactive quiz — for each message, asks "phishing or legit?" and scores you at the end. E.g. `phish-quiz 10 hard`, `phish-quiz all critical`. |
 
+### Reporting
+
+| Command | Description |
+|---|---|
+| `generate-report [output.html]` | Aggregates every finding gathered this session (port scan, TSE, web audit, dir-brute, compliance, CVE, logs, MITRE mapping, C2 beaconing) into a single self-contained HTML report. Default output: `train_report.html`. |
+
 ---
 
 ## 🖼 Screenshots
@@ -243,6 +253,12 @@ python3 main.py
 
 ### `hunt-beacon` — statistical C2 beaconing detection
 ![C2 Beacon Detection](docs/screenshots/hunt-beacon.png)
+
+### `dir-brute` — web directory/file discovery
+![Directory Brute-Force](docs/screenshots/dir-brute.png)
+
+### `generate-report` — full session findings exported as HTML
+![HTML Report](docs/screenshots/report.png)
 
 ### `phish-quiz` — interactive phishing-awareness quiz
 ![Phishing Quiz](docs/screenshots/phish-quiz.png)
@@ -285,7 +301,9 @@ train_framework/
     ├── api_tester.py
     ├── binary_analyzer.py
     ├── vault_manager.py
-    └── phish_awareness.py
+    ├── phish_awareness.py
+    ├── dir_brute.py
+    └── report_generator.py
 ```
 
 ---
