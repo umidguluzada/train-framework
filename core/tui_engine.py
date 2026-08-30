@@ -67,23 +67,55 @@ def print_status(session: Session) -> None:
 
 
 HELP_TEXT = """
-[bold]Core commands:[/bold]
-  set target <IP/URL>     Set the current target
-  status                  Show current session state
-  scan                    Port scan (via native_modules/scanner.cpp)
-  run-tse                 Run TRAIN Scripting Engine audit scripts
-  sniff / ids-run          Start the Go IDS/IPS engine
-  audit-web                Web server header/misconfiguration audit
-  audit-cve                YAML template-based CVE scan
-  audit-compliance          CIS Benchmark compliance check
-  audit-logs                Log correlation
-  hunt-mitre                MITRE ATT&CK mapping
-  audit-osint / geo-track    OSINT and geolocation recon
-  check-vt <hash/IP>        VirusTotal reputation lookup
-  audit-pass <password>      Password entropy audit
-  encode / decode            Base64/Hex/URL encode-decode
-  help                       Show this list
-  exit / quit                Exit
+[bold]Core:[/bold]
+  set target <IP/URL>              Set the current target
+  status                            Show current session state
+  help                               Show this list
+  exit / quit                        Exit
+
+[bold]Recon & IDS/IPS:[/bold]
+  scan [start] [end]                Port scan (native_modules/scanner.cpp)
+  sniff <iface> [rules] [--ips]      Start the Go IDS/IPS engine (alias: ids-run)
+
+[bold]Web auditing:[/bold]
+  audit-web [url]                    HTTP header/TLS/misconfig audit
+  web-proxy [port]                   Local HTTP forwarding proxy (live traffic log)
+  api-test <url>                     Probe a single API endpoint
+  api-discover <base_url>            Probe common API path conventions
+  dir-brute <url> [wordlist]         Web directory/file discovery (gobuster-style)
+
+[bold]Vulnerability & compliance:[/bold]
+  run-tse [ports]                    TRAIN Scripting Engine audit checks
+  audit-cve <keywords>                NVD CVE lookup (or --from-tse)
+  template-scan <file.yaml>           YAML template-based checks
+  audit-compliance                    CIS Benchmark-inspired local audit
+
+[bold]Log analysis & threat hunting:[/bold]
+  audit-logs <file> --format <type>   Log correlation (auth/nginx/powershell/lsass/...)
+  hunt-mitre                          Map findings to MITRE ATT&CK techniques
+  hunt-beacon                         Detect C2 beaconing in timestamped logs
+
+[bold]OSINT & reputation:[/bold]
+  audit-osint <domain>                 Passive DNS enumeration
+  geo-track <ip/domain>                 Geolocation/ASN lookup
+  check-vt <hash/IP>                    VirusTotal reputation lookup
+
+[bold]Binary forensics:[/bold]
+  analyze-binary <file>                 Static PE/ELF analysis
+
+[bold]Passwords & encryption:[/bold]
+  audit-pass <password> [--offline]     Password entropy + breach check
+  vault-init / vault-add / vault-get     AES-256 encrypted local secrets vault
+  vault-list / vault-remove
+  encode / decode <base64|hex|url>        Encode/decode text
+  hash <md5|sha1|sha256|sha512>            Hash text
+
+[bold]Phishing awareness:[/bold]
+  phish-awareness [level]                Show a sample email + red flags
+  phish-quiz [count] [level]              Interactive spot-the-phish quiz
+
+[bold]Reporting:[/bold]
+  generate-report [output.html]           Export all session findings to HTML
 """
 
 
