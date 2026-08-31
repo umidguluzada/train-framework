@@ -143,6 +143,10 @@ python3 main.py
 > IDS/IPS (`sniff`/`ids-run`) requires root privileges to capture live
 > packets: `sudo python3 main.py`.
 
+> 💡 **Tip:** every command supports `<command> --help` (or `-h`) to show
+> its own usage details, e.g. `scan --help`, `dir-brute --help`,
+> `vault-add -h`.
+
 ---
 
 ## 📖 Command Reference
