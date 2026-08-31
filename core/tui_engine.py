@@ -138,6 +138,18 @@ def cmd_set(session: Session, args: list[str]) -> None:
         console.print("[red]Usage:[/red] set target <IP/URL>")
 
 
+def _print_command_help(cmd: str, handler) -> None:
+    """
+    Prints a command's own docstring (the "Usage: ..." block every module
+    writes on its handler function) when the user runs `<cmd> --help`.
+    Falls back to a generic message if a handler has no docstring.
+    """
+    doc = (handler.__doc__ or "").strip()
+    if not doc:
+        doc = f"No detailed help available for '{cmd}'."
+    console.print(Panel(doc, title=f"Help — {cmd}", border_style="cyan"))
+
+
 def dispatch(session: Session, raw_line: str) -> bool:
     """Process a single command line. Returns False if the main loop should stop (exit)."""
     raw_line = raw_line.strip()
@@ -156,6 +168,12 @@ def dispatch(session: Session, raw_line: str) -> bool:
     handler = COMMAND_REGISTRY.get(cmd)
     if handler is None:
         console.print(f"[red]Unknown command:[/red] {cmd}  ([dim]type 'help'[/dim])")
+        return True
+
+    # Any command supports `<cmd> --help` / `<cmd> -h` to show its own
+    # usage docstring, without each module needing to implement this itself.
+    if args and args[0] in ("--help", "-h"):
+        _print_command_help(cmd, handler)
         return True
 
     try:
