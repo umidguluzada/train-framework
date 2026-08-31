@@ -201,7 +201,7 @@ python3 main.py
 |---|---|
 | `audit-osint <domain>` | Passively enumerates a domain's DNS records (A, AAAA, MX, TXT, NS, CNAME, SOA). |
 | `geo-track <ip/domain>` | Shows geolocation, ISP, and ASN for an IP/domain (via ip-api.com). |
-| `check-vt <hash/IP>` | Looks up a file hash or IP's reputation via the VirusTotal v3 API (requires the `VT_API_KEY` environment variable). |
+| `check-vt <hash\|IP\|URL>` | Looks up a file hash, IP, or URL's full VirusTotal reputation (requires the `VT_API_KEY` environment variable): overall verdict, per-engine results from 90+ AV/security engines, categories, community votes, and first/last-seen dates. For a URL not yet known to VirusTotal, submits it for a fresh scan automatically. |
 
 ### Binary forensics
 
@@ -260,6 +260,9 @@ python3 main.py
 
 ### `dir-brute` — web directory/file discovery
 ![Directory Brute-Force](docs/screenshots/dir-brute.png)
+
+### `check-vt` — full VirusTotal reputation lookup (hash, IP, or URL)
+![VirusTotal Lookup](docs/screenshots/check-vt.png)
 
 ### `generate-report` — full session findings exported as HTML
 ![HTML Report](docs/screenshots/report.png)
