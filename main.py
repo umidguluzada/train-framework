@@ -23,6 +23,7 @@ from modules import vault_manager
 from modules import phish_awareness
 from modules import dir_brute
 from modules import report_generator
+from modules import wifi_audit
 
 
 def main() -> int:
