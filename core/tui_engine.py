@@ -120,6 +120,13 @@ HELP_TEXT = """
 [bold]Wireless & router auditing:[/bold]
   wifi-scan                               List nearby Wi-Fi networks, flag weak encryption
   router-audit <router_ip>                 Check router/AP management ports for exposure
+  net-discover <cidr>                      Find live LAN hosts, hostname/MAC lookup
+
+[bold]VPN & secure networking:[/bold]
+  vpn-genkeys                             Generate a WireGuard keypair
+  vpn-config <endpoint>                    Generate WireGuard server + client config
+  siem-dashboard <file> --format <type>     Live-updating SIEM-style log dashboard
+  chat-listen / chat-connect <host> <port>  End-to-end encrypted terminal chat
 """
 
 
