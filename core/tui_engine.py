@@ -116,6 +116,10 @@ HELP_TEXT = """
 
 [bold]Reporting:[/bold]
   generate-report [output.html]           Export all session findings to HTML
+
+[bold]Wireless & router auditing:[/bold]
+  wifi-scan                               List nearby Wi-Fi networks, flag weak encryption
+  router-audit <router_ip>                 Check router/AP management ports for exposure
 """
 
 
