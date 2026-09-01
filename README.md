@@ -44,6 +44,7 @@ single interactive terminal interface (TUI).
   - [Passwords & encryption](#passwords--encryption)
   - [Phishing awareness training](#phishing-awareness-training)
   - [Reporting](#reporting)
+  - [Wireless & router auditing](#wireless--router-auditing)
 - [Screenshots](#-screenshots)
 - [Project Structure](#-project-structure)
 - [Contributing](#-contributing)
@@ -71,6 +72,7 @@ single interactive terminal interface (TUI).
 | `phish_awareness.py` | Python | Interactive phishing-recognition training with 44 examples across 4 difficulty levels |
 | `dir_brute.py` | Python | Web directory/file discovery (gobuster/dirb-style) |
 | `report_generator.py` | Python | Aggregates all session findings into a single HTML report |
+| `wifi_audit.py` | Python | Passive wireless network scan + router management-port exposure audit |
 
 ---
 
@@ -236,6 +238,13 @@ python3 main.py
 |---|---|
 | `generate-report [output.html]` | Aggregates every finding gathered this session (port scan, TSE, web audit, dir-brute, compliance, CVE, logs, MITRE mapping, C2 beaconing) into a single self-contained HTML report. Default output: `train_report.html`. |
 
+### Wireless & router auditing
+
+| Command | Description |
+|---|---|
+| `wifi-scan` | Lists nearby wireless networks (via `nmcli`) and flags weak/no encryption (Open, WEP, WPA1). Purely passive — reads what access points already broadcast, no handshake capture, no deauthentication, no cracking. |
+| `router-audit <router_ip>` | Checks a router/access point's own management ports (Telnet, UPnP/SSDP, HTTP/HTTPS admin, TR-069) for risky exposure. Point it at your own router's LAN IP (e.g. `192.168.1.1`) — checks which ports respond only, never attempts login. |
+
 ---
 
 ## 🖼 Screenshots
@@ -266,6 +275,9 @@ python3 main.py
 
 ### `generate-report` — full session findings exported as HTML
 ![HTML Report](docs/screenshots/report.png)
+
+### `router-audit` — router/AP management-port exposure check
+![Router Audit](docs/screenshots/router-audit.png)
 
 ### `phish-quiz` — interactive phishing-awareness quiz
 ![Phishing Quiz](docs/screenshots/phish-quiz.png)
@@ -311,6 +323,7 @@ train_framework/
     ├── phish_awareness.py
     ├── dir_brute.py
     └── report_generator.py
+    └── wifi_audit.py
 ```
 
 ---
