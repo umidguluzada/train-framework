@@ -212,3 +212,147 @@ def cmd_router_audit(session: Session, args: list[str]) -> None:
     report = run_router_audit(target)
     _render_router_report(report)
     session.state["last_router_audit"] = report
+
+
+# ---------------------------------------------------------------------------
+# Network host discovery (which devices are alive on the LAN)
+# ---------------------------------------------------------------------------
+
+import ipaddress  # noqa: E402
+import re  # noqa: E402
+import subprocess as _subprocess  # noqa: E402
+import concurrent.futures  # noqa: E402
+
+
+@dataclass
+class DiscoveredHost:
+    ip: str
+    alive: bool
+    hostname: str = ""
+    mac: str = ""
+    vendor: str = ""
+
+
+@dataclass
+class DiscoverReport:
+    cidr: str
+    hosts: list[DiscoveredHost] = field(default_factory=list)
+
+
+def _ping_host(ip: str, timeout: float = 1.0) -> bool:
+    """
+    Sends a single ICMP echo request via the system 'ping' command (one
+    packet, short timeout) - the same lightweight liveness check any
+    network troubleshooting tool uses. No payload, no repeated flooding.
+    """
+    try:
+        result = _subprocess.run(
+            ["ping", "-c", "1", "-W", str(int(timeout)), ip],
+            capture_output=True, text=True, timeout=timeout + 1,
+        )
+        return result.returncode == 0
+    except (_subprocess.SubprocessError, OSError):
+        return False
+
+
+def _read_arp_table() -> dict[str, str]:
+    """Reads the local ARP/neighbor cache (ip -> MAC), populated by the pings above."""
+    mac_by_ip: dict[str, str] = {}
+    try:
+        result = _subprocess.run(["ip", "neigh"], capture_output=True, text=True, timeout=5)
+        for line in result.stdout.splitlines():
+            m = re.match(r"^(\S+)\s+dev\s+\S+\s+lladdr\s+([0-9a-fA-F:]+)", line)
+            if m:
+                mac_by_ip[m.group(1)] = m.group(2).lower()
+    except (_subprocess.SubprocessError, OSError, FileNotFoundError):
+        pass
+    return mac_by_ip
+
+
+def _reverse_lookup(ip: str) -> str:
+    try:
+        return socket.gethostbyaddr(ip)[0]
+    except (socket.herror, socket.gaierror, OSError):
+        return ""
+
+
+def run_net_discover(cidr: str, threads: int = 32) -> DiscoverReport:
+    network = ipaddress.ip_network(cidr, strict=False)
+    hosts_to_check = [str(ip) for ip in network.hosts()]
+
+    report = DiscoverReport(cidr=cidr)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
+        alive_map = dict(zip(hosts_to_check, pool.map(_ping_host, hosts_to_check)))
+
+    alive_ips = [ip for ip, alive in alive_map.items() if alive]
+    mac_table = _read_arp_table()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
+        hostnames = dict(zip(alive_ips, pool.map(_reverse_lookup, alive_ips)))
+
+    for ip in alive_ips:
+        report.hosts.append(DiscoveredHost(
+            ip=ip, alive=True,
+            hostname=hostnames.get(ip, ""),
+            mac=mac_table.get(ip, ""),
+        ))
+
+    report.hosts.sort(key=lambda h: tuple(int(p) for p in h.ip.split(".")))
+    return report
+
+
+def _render_discover_report(report: DiscoverReport) -> None:
+    if not report.hosts:
+        console.print(Panel(
+            f"No live hosts found on {report.cidr}. (Some devices/firewalls silently "
+            f"drop ping requests, so this isn't always exhaustive.)",
+            title="Network Discovery", border_style="yellow",
+        ))
+        return
+
+    table = Table(title=f"Live Hosts on {report.cidr} ({len(report.hosts)} found)")
+    table.add_column("IP", style="bold cyan")
+    table.add_column("Hostname")
+    table.add_column("MAC Address")
+
+    for h in report.hosts:
+        table.add_row(h.ip, h.hostname or "-", h.mac or "-")
+
+    console.print(table)
+    console.print("[dim]Discovery via ICMP ping + local ARP cache + reverse DNS - "
+                   "no port scanning performed here (use 'scan <ip>' for that).[/dim]")
+
+
+@register_command("net-discover")
+def cmd_net_discover(session: Session, args: list[str]) -> None:
+    """
+    Usage: net-discover <cidr>
+    Finds live devices on a network range, e.g.:
+      net-discover 192.168.1.0/24
+    Shows each responding IP's hostname (via reverse DNS, if available)
+    and MAC address (via the local ARP cache, if the device is on the
+    same LAN segment). Uses simple ICMP ping - one packet per host, no
+    port scanning (use 'scan <ip>' on a specific host for that).
+    """
+    if not args:
+        console.print("[red]Usage:[/red] net-discover <cidr>  (e.g. net-discover 192.168.1.0/24)")
+        return
+
+    cidr = args[0]
+    try:
+        network = ipaddress.ip_network(cidr, strict=False)
+    except ValueError as e:
+        console.print(f"[red]Invalid network range:[/red] {e}")
+        return
+
+    if network.num_addresses > 1024:
+        console.print(f"[red]Range too large ({network.num_addresses} addresses).[/red] "
+                       f"Use a /22 or smaller (e.g. /24, /28).")
+        return
+
+    console.print(f"[cyan]Discovering live hosts on[/cyan] {cidr}  "
+                   f"[dim]({network.num_addresses - 2} addresses to check)...[/dim]")
+    report = run_net_discover(cidr)
+    _render_discover_report(report)
+    session.state["last_net_discover"] = report

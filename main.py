@@ -27,7 +27,10 @@ from modules import vault_manager    # noqa: F401  -> registers "vault-*"
 from modules import phish_awareness  # noqa: F401  -> registers "phish-awareness", "phish-quiz"
 from modules import dir_brute        # noqa: F401  -> registers "dir-brute"
 from modules import report_generator  # noqa: F401  -> registers "generate-report"
-from modules import wifi_audit        # noqa: F401  -> registers "wifi-scan", "router-audit"
+from modules import wifi_audit        # noqa: F401  -> registers "wifi-scan", "router-audit", "net-discover"
+from modules import vpn_config        # noqa: F401  -> registers "vpn-genkeys", "vpn-config"
+from modules import siem_dashboard    # noqa: F401  -> registers "siem-dashboard"
+from modules import secure_chat       # noqa: F401  -> registers "chat-listen", "chat-connect"
 
 
 def main() -> int:
