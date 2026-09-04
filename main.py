@@ -31,6 +31,7 @@ from modules import wifi_audit        # noqa: F401  -> registers "wifi-scan", "r
 from modules import vpn_config        # noqa: F401  -> registers "vpn-genkeys", "vpn-config"
 from modules import siem_dashboard    # noqa: F401  -> registers "siem-dashboard"
 from modules import secure_chat       # noqa: F401  -> registers "chat-listen", "chat-connect"
+from modules import plugin_engine     # noqa: F401  -> registers "list-plugins"
 
 
 def main() -> int:

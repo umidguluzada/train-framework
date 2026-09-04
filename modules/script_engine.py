@@ -328,6 +328,23 @@ def _run_checks_for_port(target: str, port: int) -> list[TSEFinding]:
         f = check_redis_noauth(target, port)
         if f:
             findings.append(f)
+
+    # User-defined plugins (TRAIN's equivalent of Nmap's NSE) - any .py file
+    # dropped into plugins/ following the documented convention runs here
+    # automatically, alongside the built-in checks above.
+    try:
+        from modules.plugin_engine import run_plugins_for_port
+        for outcome in run_plugins_for_port(target, port):
+            findings.append(TSEFinding(
+                port=port,
+                check=outcome.get("_plugin_name", "plugin"),
+                result=str(outcome.get("result", "")),
+                severity=outcome.get("severity", "info"),
+                detail=str(outcome.get("detail", "")),
+            ))
+    except ImportError:
+        pass  # plugin_engine not available - built-in checks still ran above
+
     return findings
 
 

@@ -46,6 +46,7 @@ single interactive terminal interface (TUI).
   - [Reporting](#reporting)
   - [Wireless & router auditing](#wireless--router-auditing)
   - [VPN & secure networking](#vpn--secure-networking)
+  - [Plugin system (TSE extensibility)](#plugin-system-tse-extensibility)
 - [Screenshots](#-screenshots)
 - [Project Structure](#-project-structure)
 - [Contributing](#-contributing)
@@ -77,6 +78,7 @@ single interactive terminal interface (TUI).
 | `vpn_config.py` | Python | WireGuard VPN keypair and configuration generator |
 | `siem_dashboard.py` | Python | Live-updating SIEM-style dashboard over a log file |
 | `secure_chat.py` | Python | End-to-end encrypted terminal-to-terminal chat over TCP |
+| `plugin_engine.py` | Python | Loads user-written plugins from `plugins/` — TRAIN's Nmap-NSE-style extensibility system |
 
 ---
 
@@ -260,6 +262,36 @@ python3 main.py
 | `chat-listen <port> <passphrase>` | Waits for one incoming secure chat connection. Messages are encrypted with a key derived from the shared passphrase (PBKDF2 + Fernet/AES) before ever leaving the machine. |
 | `chat-connect <host> <port> <passphrase>` | Connects to a peer running `chat-listen` with the same passphrase, for an end-to-end encrypted terminal chat session. Type `/quit` to leave. |
 
+### Plugin system (TSE extensibility)
+
+TRAIN's equivalent of Nmap's NSE (Nmap Scripting Engine): drop a Python
+file into `plugins/` following a small convention, and it becomes a new
+port-triggered check that `run-tse` picks up automatically — no core
+code changes needed. See `plugins/example_http_title.py` for the
+template. Nine example plugins ship out of the box:
+
+| Plugin | Ports | What it checks |
+|---|---|---|
+| `example_http_title.py` | all | Fetches the HTML `<title>` of whatever's on the port |
+| `dns_banner.py` | 53 | DNS server version query |
+| `rdp_exposure.py` | 3389 | Flags RDP exposure |
+| `smtp_banner.py` | 25, 465, 587 | Mail server banner |
+| `telnet_banner.py` | 23 | Flags Telnet exposure (unencrypted admin access) |
+| `tls_cert_expiry.py` | 443, 8443 | Days remaining before the TLS cert expires |
+| `vnc_banner.py` | 5900 | Flags VNC exposure |
+| `ssh_banner_plugin.py` | 22, 2222 | Flags legacy SSH implementations in the banner |
+| `security_headers_plugin.py` | 80, 443, 8080, 8443 | Flags dangerous CORS misconfigurations |
+
+| Command | Description |
+|---|---|
+| `list-plugins` | Lists every plugin found in `plugins/`, and any load errors. |
+
+**Write your own:** a plugin file needs `PLUGIN_NAME` (str), `PLUGIN_PORTS`
+(a list of ports, or the string `"all"` to run on every port TSE checks),
+and a `run_check(target, port)` function returning `None` or a dict with
+`result`/`severity`/`detail` keys. ⚠️ Plugins are arbitrary Python code
+executed in-process — only add plugins you wrote yourself or fully trust.
+
 ---
 
 ## 🖼 Screenshots
@@ -309,6 +341,9 @@ python3 main.py
 ### `phish-quiz` — interactive phishing-awareness quiz
 ![Phishing Quiz](docs/screenshots/phish-quiz.png)
 
+### `list-plugins` — loaded TSE plugins (Nmap-NSE-style extensibility)
+![Plugin List](docs/screenshots/list-plugins.png)
+
 ---
 
 ## 📁 Project Structure
@@ -330,6 +365,17 @@ train_framework/
 │
 ├── templates/
 │   └── example-template.yaml    # Sample YAML audit template
+│
+├── plugins/                      # User-extensible TSE checks (Nmap-NSE-style)
+│   ├── example_http_title.py
+│   ├── dns_banner.py
+│   ├── rdp_exposure.py
+│   ├── smtp_banner.py
+│   ├── telnet_banner.py
+│   ├── tls_cert_expiry.py
+│   ├── vnc_banner.py
+│   ├── ssh_banner_plugin.py
+│   └── security_headers_plugin.py
 │
 ├── docs/
 │   └── screenshots/              # README screenshots
@@ -354,6 +400,7 @@ train_framework/
     └── vpn_config.py
     └── siem_dashboard.py
     └── secure_chat.py
+    └── plugin_engine.py
 ```
 
 ---
