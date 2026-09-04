@@ -127,6 +127,9 @@ HELP_TEXT = """
   vpn-config <endpoint>                    Generate WireGuard server + client config
   siem-dashboard <file> --format <type>     Live-updating SIEM-style log dashboard
   chat-listen / chat-connect <host> <port>  End-to-end encrypted terminal chat
+
+[bold]Plugin system (TSE extensibility):[/bold]
+  list-plugins                            List loaded plugins from plugins/ (Nmap-NSE-style)
 """
 
 
