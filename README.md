@@ -45,7 +45,7 @@ single interactive terminal interface (TUI).
   - [Phishing awareness training](#phishing-awareness-training)
   - [Reporting](#reporting)
   - [Wireless & router auditing](#wireless--router-auditing)
-  - [VPN & secure networking](#vpn--secure-networking)
+  - [Secure networking](#secure-networking)
   - [Plugin system (TSE extensibility)](#plugin-system-tse-extensibility)
 - [Screenshots](#-screenshots)
 - [Project Structure](#-project-structure)
@@ -75,7 +75,6 @@ single interactive terminal interface (TUI).
 | `dir_brute.py` | Python | Web directory/file discovery (gobuster/dirb-style) |
 | `report_generator.py` | Python | Aggregates all session findings into a single HTML report |
 | `wifi_audit.py` | Python | Passive wireless network scan, router management-port audit, and LAN host discovery |
-| `vpn_config.py` | Python | WireGuard VPN keypair and configuration generator |
 | `siem_dashboard.py` | Python | Live-updating SIEM-style dashboard over a log file |
 | `secure_chat.py` | Python | End-to-end encrypted terminal-to-terminal chat over TCP |
 | `plugin_engine.py` | Python | Loads user-written plugins from `plugins/` — TRAIN's Nmap-NSE-style extensibility system |
@@ -252,12 +251,10 @@ python3 main.py
 | `router-audit <router_ip>` | Checks a router/access point's own management ports (Telnet, UPnP/SSDP, HTTP/HTTPS admin, TR-069) for risky exposure. Point it at your own router's LAN IP (e.g. `192.168.1.1`) — checks which ports respond only, never attempts login. |
 | `net-discover <cidr>` | Finds live devices on a network range (e.g. `192.168.1.0/24`) via ICMP ping, showing each host's IP, reverse-DNS hostname, and MAC address (from the local ARP cache). No port scanning — use `scan <ip>` on a specific host for that. |
 
-### VPN & secure networking
+### Secure networking
 
 | Command | Description |
 |---|---|
-| `vpn-genkeys` | Generates a fresh WireGuard-compatible X25519 keypair, printed to the terminal. |
-| `vpn-config <server_endpoint> [server_ip] [client_ip] [port]` | Generates a complete WireGuard server + client configuration pair (fresh keypairs for both sides) and writes them to `train_vpn_server.conf` / `train_vpn_client.conf`. Review and apply with `wg-quick up <file>` (requires `wireguard-tools`). |
 | `siem-dashboard <file> --format <type> [--interval N]` | Live-updating SIEM-style dashboard over a log file — event counts by kind, top sources, active brute-force alerts, and recent activity, refreshing every few seconds. Built on the same parsers as `audit-logs`. Ctrl+C to stop. |
 | `chat-listen <port> <passphrase>` | Waits for one incoming secure chat connection. Messages are encrypted with a key derived from the shared passphrase (PBKDF2 + Fernet/AES) before ever leaving the machine. |
 | `chat-connect <host> <port> <passphrase>` | Connects to a peer running `chat-listen` with the same passphrase, for an end-to-end encrypted terminal chat session. Type `/quit` to leave. |
@@ -329,9 +326,6 @@ executed in-process — only add plugins you wrote yourself or fully trust.
 ### `net-discover` — live LAN hosts, hostname, and MAC lookup
 ![Network Discovery](docs/screenshots/net-discover.png)
 
-### `vpn-config` — WireGuard server/client configuration generator
-![VPN Config](docs/screenshots/vpn-config.png)
-
 ### `siem-dashboard` — live-updating SIEM-style event dashboard
 ![SIEM Dashboard](docs/screenshots/siem-dashboard.png)
 
@@ -397,7 +391,6 @@ train_framework/
     ├── dir_brute.py
     └── report_generator.py
     └── wifi_audit.py
-    └── vpn_config.py
     └── siem_dashboard.py
     └── secure_chat.py
     └── plugin_engine.py
