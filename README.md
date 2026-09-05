@@ -241,7 +241,8 @@ python3 main.py
 
 | Command | Description |
 |---|---|
-| `generate-report [output.html]` | Aggregates every finding gathered this session (port scan, TSE, web audit, dir-brute, compliance, CVE, logs, MITRE mapping, C2 beaconing) into a single self-contained HTML report. Default output: `train_report.html`. |
+| `generate-report [output.html]` | Aggregates every finding gathered this session (port scan, TSE, web audit, dir-brute, compliance, CVE, logs, MITRE mapping, C2 beaconing) into a single self-contained HTML report, including an Executive Summary with a weighted risk score (High/Medium/Low). Default output: `train_report.html`. |
+| `generate-pdf-report [output.pdf]` | Exports the same Executive Summary (risk score, High/Medium/Low counts) plus compliance/TSE/MITRE findings tables as a standalone PDF, for sharing with people who'd rather not open an HTML file. Default output: `train_report.pdf`. |
 
 ### Wireless & router auditing
 
