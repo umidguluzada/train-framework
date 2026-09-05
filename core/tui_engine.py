@@ -115,7 +115,8 @@ HELP_TEXT = """
   phish-quiz [count] [level]              Interactive spot-the-phish quiz
 
 [bold]Reporting:[/bold]
-  generate-report [output.html]           Export all session findings to HTML
+  generate-report [output.html]           Export all session findings to HTML (+ risk score)
+  generate-pdf-report [output.pdf]         Export the same findings as a PDF
 
 [bold]Wireless & router auditing:[/bold]
   wifi-scan                               List nearby Wi-Fi networks, flag weak encryption
