@@ -1,0 +1,13 @@
+id: exposed-admin-panel
+name: "Exposed Admin Panel Check"
+checks:
+  - type: http-path
+    name: "Root page reachable"
+    path: "/"
+    expect_status: 200
+    severity: info
+  - type: http-path
+    name: "Nonexistent admin path"
+    path: "/admin-secret-xyz"
+    expect_status: 200
+    severity: warning
