@@ -167,6 +167,13 @@ python3 main.py
 | `help` | Lists all available commands. |
 | `exit` / `quit` | Exits the program. |
 
+**Examples:**
+```
+set target 192.168.1.10
+status
+scan --help          # any command supports --help for its own usage
+```
+
 ### Network recon & IDS/IPS
 
 | Command | Description |
@@ -174,6 +181,14 @@ python3 main.py
 | `scan [start] [end]` | Multi-threaded C++ port scanner. Shows open ports, a service guess, and a banner. E.g. `scan 1 1024`. |
 | `sniff <iface> [rules] [--ips]` | Starts the Go IDS/IPS engine. Matches live packets against Snort-style rules in `rules.conf`. With `--ips`, blocks the matching source IP via `iptables`. E.g. `sniff eth0 native_modules/rules.conf`. |
 | `ids-run` | Alias for `sniff`. |
+
+**Examples:**
+```
+set target 127.0.0.1
+scan 1 1024
+sniff lo native_modules/rules.conf
+sniff eth0 native_modules/rules.conf --ips
+```
 
 ### Web auditing
 
@@ -185,6 +200,15 @@ python3 main.py
 | `api-discover <base_url>` | Probes a set of common API path conventions (`/api`, `/health`, `/swagger.json`, etc.). |
 | `dir-brute <url> [wordlist] [--threads N] [--ext ext1,ext2]` | Web directory/file discovery (gobuster/dirb-style). Sends plain GET requests to a wordlist of candidate paths and reports which respond with something other than 404. Uses a built-in wordlist if none is given. E.g. `dir-brute http://target.local --ext php,bak`. |
 
+**Examples:**
+```
+audit-web http://127.0.0.1:8000
+web-proxy 8899
+api-test https://api.github.com
+api-discover https://api.github.com
+dir-brute http://127.0.0.1:8000 --ext php,bak,zip --threads 30
+```
+
 ### Vulnerability & compliance auditing
 
 | Command | Description |
@@ -194,6 +218,17 @@ python3 main.py
 | `template-scan <file.yaml>` | Runs simple HTTP-path checks defined in a local YAML template (a simplified, Nuclei-style scanner). |
 | `audit-compliance` | Runs 7 CIS Benchmark-inspired checks on the local host: SSH root login, password policy, world-writable files, firewall status, audit daemon status. |
 
+**Examples:**
+```
+set target 127.0.0.1
+scan 1 100
+run-tse
+audit-cve OpenSSH 8.2
+audit-cve --from-tse
+template-scan templates/example-template.yaml
+audit-compliance
+```
+
 ### Log analysis & threat hunting
 
 | Command | Description |
@@ -201,6 +236,14 @@ python3 main.py
 | `audit-logs <file> --format <type>` | Parses a log file into structured events. Supported formats: `auth` (SSH/sudo), `syslog`, `nginx` (HTTP access log), `json-alerts` (sniffer.go output), `powershell` (Windows Event ID 4104), `lsass` (Windows Event ID 4656/4663). Automatically flags brute-force sources. |
 | `hunt-mitre` | Maps findings gathered this session (compliance, TSE, logs, IDS) to real MITRE ATT&CK technique IDs (T1110, T1548, T1078, etc.). |
 | `hunt-beacon` | Statistically analyzes timestamps from the last `audit-logs --format nginx` run to detect C2 "beaconing" (regular, automated check-in) patterns. |
+
+**Examples:**
+```
+audit-logs /var/log/auth.log --format auth
+audit-logs /var/log/nginx/access.log --format nginx
+hunt-mitre
+hunt-beacon
+```
 
 ### OSINT & reputation
 
@@ -210,11 +253,25 @@ python3 main.py
 | `geo-track <ip/domain>` | Shows geolocation, ISP, and ASN for an IP/domain (via ip-api.com). |
 | `check-vt <hash\|IP\|URL>` | Looks up a file hash, IP, or URL's full VirusTotal reputation (requires the `VT_API_KEY` environment variable): overall verdict, per-engine results from 90+ AV/security engines, categories, community votes, and first/last-seen dates. For a URL not yet known to VirusTotal, submits it for a fresh scan automatically. |
 
+**Examples:**
+```
+audit-osint google.com
+geo-track 8.8.8.8
+check-vt 44d88612fea8a8f36de82e1278abb02f
+check-vt http://example.com/suspicious-page
+```
+
 ### Binary forensics
 
 | Command | Description |
 |---|---|
 | `analyze-binary <file>` | Shows the headers, sections, entropy, and imported functions of a PE (Windows) or ELF (Linux) file — pure static analysis, no execution. |
+
+**Examples:**
+```
+analyze-binary native_modules/train_scanner
+analyze-binary ~/Downloads/suspicious.exe
+```
 
 ### Passwords & encryption
 
@@ -230,6 +287,18 @@ python3 main.py
 | `decode <base64\|hex\|url> <text>` | Decodes encoded text. |
 | `hash <md5\|sha1\|sha256\|sha512> <text>` | Computes the hash of a given text. |
 
+**Examples:**
+```
+audit-pass MyP@ssw0rd123 --offline
+vault-init
+vault-add github-token
+vault-get github-token
+vault-list
+encode base64 Hello World
+decode base64 SGVsbG8gV29ybGQ=
+hash sha256 test123
+```
+
 ### Phishing awareness training
 
 | Command | Description |
@@ -237,12 +306,28 @@ python3 main.py
 | `phish-awareness [level]` | Shows a random sample phishing/legitimate email and explains its red flags. Level: `easy`, `medium`, `hard`, `critical` (default: any). |
 | `phish-quiz [count] [level]` | Interactive quiz — for each message, asks "phishing or legit?" and scores you at the end. E.g. `phish-quiz 10 hard`, `phish-quiz all critical`. |
 
+**Examples:**
+```
+phish-awareness
+phish-awareness critical
+phish-quiz 5
+phish-quiz 10 hard
+phish-quiz all critical
+```
+
 ### Reporting
 
 | Command | Description |
 |---|---|
 | `generate-report [output.html]` | Aggregates every finding gathered this session (port scan, TSE, web audit, dir-brute, compliance, CVE, logs, MITRE mapping, C2 beaconing) into a single self-contained HTML report, including an Executive Summary with a weighted risk score (High/Medium/Low). Default output: `train_report.html`. |
 | `generate-pdf-report [output.pdf]` | Exports the same Executive Summary (risk score, High/Medium/Low counts) plus compliance/TSE/MITRE findings tables as a standalone PDF, for sharing with people who'd rather not open an HTML file. Default output: `train_report.pdf`. |
+
+**Examples:**
+```
+generate-report
+generate-report my-audit.html
+generate-pdf-report
+```
 
 ### Wireless & router auditing
 
@@ -252,6 +337,13 @@ python3 main.py
 | `router-audit <router_ip>` | Checks a router/access point's own management ports (Telnet, UPnP/SSDP, HTTP/HTTPS admin, TR-069) for risky exposure. Point it at your own router's LAN IP (e.g. `192.168.1.1`) — checks which ports respond only, never attempts login. |
 | `net-discover <cidr>` | Finds live devices on a network range (e.g. `192.168.1.0/24`) via ICMP ping, showing each host's IP, reverse-DNS hostname, and MAC address (from the local ARP cache). No port scanning — use `scan <ip>` on a specific host for that. |
 
+**Examples:**
+```
+wifi-scan
+router-audit 192.168.1.1
+net-discover 192.168.1.0/24
+```
+
 ### Secure networking
 
 | Command | Description |
@@ -259,6 +351,15 @@ python3 main.py
 | `siem-dashboard <file> --format <type> [--interval N]` | Live-updating SIEM-style dashboard over a log file — event counts by kind, top sources, active brute-force alerts, and recent activity, refreshing every few seconds. Built on the same parsers as `audit-logs`. Ctrl+C to stop. |
 | `chat-listen <port> <passphrase>` | Waits for one incoming secure chat connection. Messages are encrypted with a key derived from the shared passphrase (PBKDF2 + Fernet/AES) before ever leaving the machine. |
 | `chat-connect <host> <port> <passphrase>` | Connects to a peer running `chat-listen` with the same passphrase, for an end-to-end encrypted terminal chat session. Type `/quit` to leave. |
+
+**Examples:**
+```
+siem-dashboard /var/log/auth.log --format auth --interval 3
+# terminal A:
+chat-listen 5566 my-shared-passphrase
+# terminal B:
+chat-connect 127.0.0.1 5566 my-shared-passphrase
+```
 
 ### Plugin system (TSE extensibility)
 
@@ -283,6 +384,14 @@ template. Nine example plugins ship out of the box:
 | Command | Description |
 |---|---|
 | `list-plugins` | Lists every plugin found in `plugins/`, and any load errors. |
+
+**Examples:**
+```
+list-plugins
+set target 127.0.0.1
+scan 1 100
+run-tse                 # built-in checks AND every matching plugin run together
+```
 
 **Write your own:** a plugin file needs `PLUGIN_NAME` (str), `PLUGIN_PORTS`
 (a list of ports, or the string `"all"` to run on every port TSE checks),
