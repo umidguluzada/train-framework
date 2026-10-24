@@ -5,3 +5,5 @@ native_modules/train_sniffer
 native_modules/go.sum
 native_modules/go.mod
 .env
+train_vpn_*.conf
+*.conf
