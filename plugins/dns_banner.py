@@ -11,6 +11,7 @@ import socket
 import struct
 
 PLUGIN_NAME = "DNS Version Query"
+PLUGIN_DESCRIPTION = "Asks a DNS server for its version.bind string."
 PLUGIN_PORTS = [53]
 
 

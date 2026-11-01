@@ -23,7 +23,7 @@ import socket
 import ssl
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Mapping, Optional
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -31,6 +31,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from core.async_http import fetch_sync
 from core.tui_engine import Session, register_command
 
 console = Console()
@@ -81,10 +82,11 @@ def _normalize_url(target: str) -> str:
     return target
 
 
-def _check_headers(resp: requests.Response) -> tuple[dict[str, str], list[str]]:
+def _check_headers(headers: Mapping[str, str]) -> tuple[dict[str, str], list[str]]:
+    lowered = {key.lower(): value for key, value in headers.items()}
     present, missing = {}, []
     for header, _hint in SECURITY_HEADERS.items():
-        value = resp.headers.get(header)
+        value = lowered.get(header.lower())
         if value:
             present[header] = value
         else:
@@ -139,17 +141,21 @@ def run_web_audit(target: str) -> WebAuditResult:
     url = _normalize_url(target)
     result = WebAuditResult(url=url)
 
-    session = requests.Session()
-    session.headers.update({"User-Agent": USER_AGENT})
-
-    try:
-        resp = session.get(url, timeout=DEFAULT_TIMEOUT, allow_redirects=True)
-    except requests.RequestException as e:
-        result.error = str(e)
+    page = fetch_sync(
+        url,
+        read_body=False,
+        user_agent=USER_AGENT,
+        timeout_total=DEFAULT_TIMEOUT,
+    )
+    if not page.reached or page.status is None:
+        result.error = page.error or "no response"
         return result
 
-    result.status_code = resp.status_code
-    result.headers_present, result.headers_missing = _check_headers(resp)
+    result.status_code = page.status
+    result.headers_present, result.headers_missing = _check_headers(page.headers)
+
+    session = requests.Session()
+    session.headers.update({"User-Agent": USER_AGENT})
 
     parsed = urlparse(url)
     if parsed.scheme == "https":
@@ -221,7 +227,8 @@ def cmd_audit_web(session: Session, args: list[str]) -> None:
         return
 
     console.print(f"[cyan]Auditing[/cyan] {target}...")
-    result = run_web_audit(target)
+    with console.status("[cyan]Checking the homepage and TLS certificate...[/cyan]"):
+        result = run_web_audit(target)
     _render_result(result)
     session.state["last_web_audit"] = result
 

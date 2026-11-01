@@ -78,6 +78,42 @@ def _run_native_binary(binary_path: Path, args: list[str], timeout_sec: int = 12
         ) from e
 
 
+MAX_SCAN_THREADS = 200
+MAX_SCAN_TIMEOUT_MS = 2000
+
+
+def validate_scan_result(payload: Any) -> dict[str, Any]:
+    """
+    Accept the scanner's JSON object and keep only well-formed port rows.
+    Banners are truncated so a noisy service cannot flood the TUI or report.
+    """
+    if not isinstance(payload, dict):
+        raise BridgeError("Scanner JSON must be an object.")
+    ports = payload.get("open_ports", [])
+    if not isinstance(ports, list):
+        raise BridgeError("Scanner JSON field 'open_ports' must be a list.")
+
+    cleaned: list[dict[str, Any]] = []
+    for entry in ports:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            port = int(entry.get("port"))
+        except (TypeError, ValueError):
+            continue
+        if not 1 <= port <= 65535:
+            continue
+        cleaned.append({
+            "port": port,
+            "service_guess": str(entry.get("service_guess", "unknown"))[:64],
+            "banner": str(entry.get("banner", ""))[:300],
+        })
+
+    result = dict(payload)
+    result["open_ports"] = cleaned
+    return result
+
+
 def run_port_scan(
     target: str,
     start_port: int = 1,
@@ -86,8 +122,13 @@ def run_port_scan(
     timeout_ms: int = 500,
 ) -> dict[str, Any]:
     """Runs the C++ port scanner and returns its parsed JSON result."""
+    if start_port < 1 or end_port > 65535 or start_port > end_port:
+        raise BridgeError("Port range must be within 1-65535 and start <= end.")
+    threads = max(1, min(int(threads), MAX_SCAN_THREADS))
+    timeout_ms = max(100, min(int(timeout_ms), MAX_SCAN_TIMEOUT_MS))
     args = [target, str(start_port), str(end_port), str(threads), str(timeout_ms)]
-    return _run_native_binary(SCANNER_BINARY, args, timeout_sec=max(30, timeout_ms // 100))
+    timeout_sec = min(120, max(30, timeout_ms // 100))
+    return validate_scan_result(_run_native_binary(SCANNER_BINARY, args, timeout_sec=timeout_sec))
 
 
 def _print_scan_results(result: dict[str, Any]) -> None:
@@ -162,10 +203,13 @@ def cmd_scan(session: Session, args: list[str]) -> None:
 
 
 def native_binary_status() -> dict[str, bool]:
-    """Quick health check used by a future 'doctor'/'status' command."""
+    """Quick health check used by the 'doctor' and 'status' commands."""
+    sniffer = NATIVE_MODULES_DIR / "train_sniffer"
     return {
         "train_scanner": SCANNER_BINARY.exists(),
+        "train_sniffer": sniffer.exists(),
         "g++": shutil.which("g++") is not None,
+        "go": shutil.which("go") is not None,
     }
 
 

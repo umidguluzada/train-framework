@@ -9,6 +9,7 @@ connect). No commands are sent, no authentication attempted.
 import socket
 
 PLUGIN_NAME = "SMTP Banner"
+PLUGIN_DESCRIPTION = "Reads the SMTP greeting banner."
 PLUGIN_PORTS = [25, 465, 587]
 
 

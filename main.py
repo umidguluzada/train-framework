@@ -6,11 +6,17 @@ Entry point.
 Each module registers its commands into core.tui_engine.COMMAND_REGISTRY via
 the `register_command` decorator. Importing a module here (for its side
 effect) is enough to make its commands available in the TUI.
+
+  python main.py                 interactive TUI
+  python main.py --version       print the version
+  python main.py -c "doctor"     run one command and exit
 """
 
+import argparse
 import sys
 
 from core.tui_engine import run
+from core.version import VERSION
 from core import bridge              # noqa: F401  -> registers "scan", "sniff", "ids-run"
 from modules import web_auditor      # noqa: F401  -> registers "audit-web", "web-proxy"
 from modules import crypto_utils     # noqa: F401  -> registers "encode"/"decode"/"hash"
@@ -33,7 +39,25 @@ from modules import secure_chat       # noqa: F401  -> registers "chat-listen", 
 from modules import plugin_engine     # noqa: F401  -> registers "list-plugins"
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="train",
+        description="TRAIN purple-team CLI",
+    )
+    parser.add_argument("--version", action="store_true", help="Print the version and exit")
+    parser.add_argument("-c", "--command", help="Run one command and exit")
+    args = parser.parse_args(argv)
+
+    if args.version:
+        print(f"TRAIN {VERSION}")
+        return 0
+    if args.command:
+        from core.tui_engine import Session, dispatch, print_banner
+        session = Session()
+        print_banner()
+        dispatch(session, args.command)
+        return 0
+
     run()
     return 0
 

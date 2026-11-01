@@ -11,6 +11,7 @@ kind of check yourself without touching the core module.
 import socket
 
 PLUGIN_NAME = "SSH Banner (custom)"
+PLUGIN_DESCRIPTION = "Reads the SSH version banner."
 PLUGIN_PORTS = [22, 2222]
 
 

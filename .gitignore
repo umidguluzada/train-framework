@@ -6,4 +6,7 @@ native_modules/go.sum
 native_modules/go.mod
 .env
 train_vpn_*.conf
-*.conf
+train_report.html
+train_report.json
+train_report.pdf
+my-audit.html

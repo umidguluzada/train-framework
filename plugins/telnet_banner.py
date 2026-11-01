@@ -10,6 +10,7 @@ whatever the service sends unprompted; it never attempts to log in.
 import socket
 
 PLUGIN_NAME = "Telnet Exposure Check"
+PLUGIN_DESCRIPTION = "Reads the Telnet banner and flags cleartext admin access."
 PLUGIN_PORTS = [23]
 
 

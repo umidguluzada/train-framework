@@ -11,6 +11,7 @@ the common recommendation).
 import socket
 
 PLUGIN_NAME = "RDP Exposure Check"
+PLUGIN_DESCRIPTION = "Reports whether RDP accepts a TCP connection."
 PLUGIN_PORTS = [3389]
 
 

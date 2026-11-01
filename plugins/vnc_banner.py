@@ -9,6 +9,7 @@ attempts authentication.
 import socket
 
 PLUGIN_NAME = "VNC Exposure Check"
+PLUGIN_DESCRIPTION = "Reads the VNC protocol greeting."
 PLUGIN_PORTS = [5900]
 
 

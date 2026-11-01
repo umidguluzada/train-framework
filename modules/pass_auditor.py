@@ -22,11 +22,11 @@ import string
 from dataclasses import dataclass
 from typing import Optional
 
-import requests
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from core.async_http import fetch_sync
 from core.tui_engine import Session, register_command
 
 console = Console()
@@ -89,17 +89,16 @@ def check_hibp_breach(password: str) -> Optional[int]:
     sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
     prefix, suffix = sha1[:5], sha1[5:]
 
-    try:
-        resp = requests.get(
-            HIBP_RANGE_URL.format(prefix=prefix),
-            timeout=HIBP_TIMEOUT,
-            headers={"User-Agent": "TRAIN-Framework-PassAuditor/0.1"},
-        )
-        resp.raise_for_status()
-    except requests.RequestException:
+    page = fetch_sync(
+        HIBP_RANGE_URL.format(prefix=prefix),
+        user_agent="TRAIN-Framework-PassAuditor/1.0",
+        timeout_total=HIBP_TIMEOUT,
+        max_bytes=1_000_000,
+    )
+    if not page.reached or page.status != 200:
         return None
 
-    for line in resp.text.splitlines():
+    for line in page.text.splitlines():
         parts = line.split(":")
         if len(parts) == 2 and parts[0] == suffix:
             try:

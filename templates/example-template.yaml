@@ -1,13 +1,20 @@
-id: exposed-admin-panel
-name: "Exposed Admin Panel Check"
+id: security-header-baseline
+name: "Security header baseline"
 checks:
   - type: http-path
-    name: "Root page reachable"
+    name: "Site responds"
     path: "/"
     expect_status: 200
     severity: info
-  - type: http-path
-    name: "Nonexistent admin path"
-    path: "/admin-secret-xyz"
-    expect_status: 200
+  - type: http-header
+    name: "HSTS present"
+    path: "/"
+    header: "Strict-Transport-Security"
+    expect_present: true
+    severity: warning
+  - type: http-header
+    name: "MIME sniffing blocked"
+    path: "/"
+    header: "X-Content-Type-Options"
+    expect_value: "nosniff"
     severity: warning

@@ -22,16 +22,18 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.history import InMemoryHistory
 
+from core.version import VERSION
+
 console = Console()
 
-BANNER = r"""
+BANNER = rf"""
 [bold cyan] _____ ____      _    ___ _   _[/bold cyan]
 [bold cyan]|_   _|  _ \    / \  |_ _| \ | |[/bold cyan]
 [bold cyan]  | | | |_) |  / _ \  | ||  \| |[/bold cyan]
 [bold cyan]  | | |  _ <  / ___ \ | || |\  |[/bold cyan]
 [bold cyan]  |_| |_| \_\/_/   \_\___|_| \_|[/bold cyan]
 [dim]Threat Response & Automated Intelligence Network[/dim]
-[dim]Purple Team CLI  |  v0.1.0-dev[/dim]
+[dim]Purple Team CLI  |  v{VERSION}[/dim]
 """
 
 # Central registry for all commands. Each module registers itself here
@@ -60,16 +62,31 @@ def print_banner() -> None:
 
 
 def print_status(session: Session) -> None:
+    from core.bridge import native_binary_status
+    from core.findings import collect_report
+
+    report = collect_report(session)
+    binaries = native_binary_status()
     table = Table(show_header=False, box=None, padding=(0, 1))
     table.add_row("[bold]Target:[/bold]", session.target or "[dim]not set[/dim]")
     table.add_row("[bold]Verbose:[/bold]", "on" if session.verbose else "off")
+    table.add_row("[bold]Commands:[/bold]", str(len(COMMAND_REGISTRY)))
+    table.add_row(
+        "[bold]Findings:[/bold]",
+        f"{len(report.findings)} recorded  ·  risk {report.risk['level']} ({report.risk['score']})",
+    )
+    scanner = "built" if binaries["train_scanner"] else "not built"
+    sniffer = "built" if binaries["train_sniffer"] else "not built"
+    table.add_row("[bold]Native:[/bold]", f"scanner {scanner}, sniffer {sniffer}")
     console.print(Panel(table, title="Session", border_style="grey50"))
 
 
 HELP_TEXT = """
 [bold]Core:[/bold]
+  menu                               Interactive command menu
   set target <IP/URL>              Set the current target
   status                            Show current session state
+  doctor                             Check local install and native binaries
   help                               Show this list
   exit / quit                        Exit
 
@@ -115,8 +132,8 @@ HELP_TEXT = """
   phish-quiz [count] [level]              Interactive spot-the-phish quiz
 
 [bold]Reporting:[/bold]
-  generate-report [output.html]           Export all session findings to HTML (+ risk score)
-  generate-pdf-report [output.pdf]         Export the same findings as a PDF
+  generate-report [output.html]           Export JSON, interactive HTML, and PDF
+  generate-pdf-report [output.pdf]         Export the PDF summary on its own
 
 [bold]Wireless & router auditing:[/bold]
   wifi-scan                               List nearby Wi-Fi networks, flag weak encryption
@@ -132,9 +149,103 @@ HELP_TEXT = """
 """
 
 
+COMMAND_GROUPS: list[tuple[str, list[str]]] = [
+    ("Core", ["menu", "set", "status", "doctor", "help"]),
+    ("Recon & IDS/IPS", ["scan", "sniff", "ids-run"]),
+    ("Web auditing", ["audit-web", "web-proxy", "api-test", "api-discover", "dir-brute"]),
+    ("Vulnerability & compliance", ["run-tse", "audit-cve", "template-scan", "audit-compliance"]),
+    ("Log analysis & threat hunting", ["audit-logs", "hunt-mitre", "hunt-beacon", "siem-dashboard"]),
+    ("OSINT & reputation", ["audit-osint", "geo-track", "check-vt"]),
+    ("Binary forensics", ["analyze-binary"]),
+    ("Passwords & encryption", ["audit-pass", "vault-init", "vault-add", "vault-get", "vault-list", "vault-remove", "encode", "decode", "hash"]),
+    ("Phishing awareness", ["phish-awareness", "phish-quiz"]),
+    ("Reporting", ["generate-report", "generate-pdf-report"]),
+    ("Wireless & router auditing", ["wifi-scan", "router-audit", "net-discover"]),
+    ("Secure networking", ["chat-listen", "chat-connect"]),
+    ("Plugins", ["list-plugins"]),
+]
+
+
+def _first_doc_line(handler) -> str:
+    doc = (handler.__doc__ or "").strip()
+    if not doc:
+        return ""
+    return doc.splitlines()[0].replace("Usage:", "").strip()
+
+
 @register_command("help")
 def cmd_help(session: Session, args: list[str]) -> None:
     console.print(Panel(HELP_TEXT, title="TRAIN Framework - Commands", border_style="magenta"))
+
+
+@register_command("menu")
+def cmd_menu(session: Session, args: list[str]) -> None:
+    """Usage: menu    Show command groups, then optionally run one command."""
+    for title, commands in COMMAND_GROUPS:
+        table = Table(title=title, show_header=False, box=None, padding=(0, 1))
+        for name in commands:
+            handler = COMMAND_REGISTRY.get(name)
+            summary = _first_doc_line(handler) if handler else "unavailable"
+            table.add_row(f"[cyan]{name}[/cyan]", summary[:78])
+        console.print(table)
+
+    try:
+        line = PromptSession().prompt("Command (blank cancels): ")
+    except (EOFError, KeyboardInterrupt):
+        console.print()
+        return
+    if line.strip():
+        dispatch(session, line)
+
+
+@register_command("doctor")
+def cmd_doctor(session: Session, args: list[str]) -> None:
+    """Usage: doctor    Check Python libraries, native binaries, and plugins."""
+    import importlib
+    import sys
+
+    from core.bridge import native_binary_status
+
+    table = Table(title=f"TRAIN {VERSION} doctor")
+    table.add_column("Check")
+    table.add_column("State")
+    table.add_column("Detail")
+
+    py_ok = sys.version_info >= (3, 10)
+    table.add_row(
+        "Python",
+        "[green]ok[/green]" if py_ok else "[red]too old[/red]",
+        f"{sys.version.split()[0]} (3.10+ required)",
+    )
+
+    for module_name, label in (
+        ("aiohttp", "aiohttp"),
+        ("rich", "rich"),
+        ("prompt_toolkit", "prompt_toolkit"),
+        ("yaml", "PyYAML"),
+        ("requests", "requests"),
+        ("cryptography", "cryptography"),
+        ("reportlab", "reportlab"),
+        ("dns.resolver", "dnspython"),
+        ("psutil", "psutil"),
+    ):
+        try:
+            importlib.import_module(module_name)
+            table.add_row(label, "[green]ok[/green]", module_name)
+        except ImportError as exc:
+            table.add_row(label, "[yellow]missing[/yellow]", str(exc))
+
+    for name, present in native_binary_status().items():
+        table.add_row(name, "[green]ok[/green]" if present else "[yellow]missing[/yellow]", "")
+
+    try:
+        from modules.plugin_engine import discover_plugins
+        plugins, errors = discover_plugins()
+        table.add_row("plugins", "[green]ok[/green]", f"{len(plugins)} loaded, {len(errors)} errors")
+    except Exception as exc:  # noqa: BLE001 - doctor should report, not crash
+        table.add_row("plugins", "[red]error[/red]", str(exc))
+
+    console.print(table)
 
 
 @register_command("status")

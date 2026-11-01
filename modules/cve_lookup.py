@@ -10,27 +10,26 @@ Registers:
 This module is purely informational/read-only:
   - The NVD lookup is a plain read against a public government database
     (nvd.nist.gov), the same one every vulnerability scanner references.
-  - The YAML template scanner only evaluates simple, declarative checks
-    (does a URL path exist? does a banner match a regex?) - it does not
-    execute arbitrary code from the YAML file, and it never performs
-    exploitation - only detection.
+  - The YAML template scanner only evaluates http-path and http-header
+    checks defined in templates/parser.py. It does not execute code from
+    the YAML file.
 """
 
 from __future__ import annotations
 
-import re
+import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-import requests
-import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from core.async_http import fetch_sync
 from core.tui_engine import Session, register_command
+from templates.parser import TemplateError, run_template
 
 console = Console()
 
@@ -55,15 +54,19 @@ def search_nvd(keyword: str, results_limit: int = NVD_RESULTS_PER_PAGE) -> list[
     No API key is required for light usage; NVD rate-limits unauthenticated
     requests, so this module makes a single request per lookup.
     """
-    params = {"keywordSearch": keyword, "resultsPerPage": results_limit}
+    page = fetch_sync(
+        NVD_API_URL,
+        params={"keywordSearch": keyword, "resultsPerPage": results_limit},
+        user_agent="TRAIN-Framework-CVELookup/1.0",
+        timeout_total=NVD_TIMEOUT,
+        max_bytes=1_000_000,
+    )
+    if not page.reached or page.status != 200:
+        raise RuntimeError(f"NVD lookup failed: {page.error or page.status}")
     try:
-        resp = requests.get(NVD_API_URL, params=params, timeout=NVD_TIMEOUT,
-                             headers={"User-Agent": "TRAIN-Framework-CVELookup/0.1"})
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        raise RuntimeError(f"NVD lookup failed: {e}") from e
-
-    data = resp.json()
+        data = json.loads(page.text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"NVD returned invalid JSON: {exc}") from exc
     entries: list[CVEEntry] = []
     for item in data.get("vulnerabilities", []):
         cve = item.get("cve", {})
@@ -162,7 +165,8 @@ def cmd_audit_cve(session: Session, args: list[str]) -> None:
     for kw in keywords:
         console.print(f"[cyan]Searching NVD for:[/cyan] {kw}")
         try:
-            entries = search_nvd(kw)
+            with console.status("[cyan]Querying NVD...[/cyan]"):
+                entries = search_nvd(kw)
         except RuntimeError as e:
             console.print(f"[red]{e}[/red]")
             continue
@@ -174,70 +178,6 @@ def cmd_audit_cve(session: Session, args: list[str]) -> None:
 # ---------------------------------------------------------------------------
 # YAML template-based configuration scanner
 # ---------------------------------------------------------------------------
-
-@dataclass
-class TemplateCheckResult:
-    name: str
-    matched: bool
-    severity: str
-    detail: str = ""
-
-
-def _load_template(path: Path) -> dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    if not isinstance(data, dict):
-        raise ValueError("Template root must be a YAML mapping (id, name, checks, ...).")
-    return data
-
-
-def _run_http_path_check(target: str, check: dict[str, Any]) -> TemplateCheckResult:
-    """
-    check: {type: http-path, path: "/admin", expect_status: 200,
-            match_regex: "optional pattern in body"}
-    """
-    path = check.get("path", "/")
-    expect_status = check.get("expect_status")
-    match_regex = check.get("match_regex")
-
-    url = target.rstrip("/") + path
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-
-    try:
-        resp = requests.get(url, timeout=6, headers={"User-Agent": "TRAIN-Framework-Templates/0.1"})
-    except requests.RequestException as e:
-        return TemplateCheckResult(name=check.get("name", path), matched=False,
-                                    severity="info", detail=f"unreachable: {e}")
-
-    status_ok = expect_status is None or resp.status_code == expect_status
-    regex_ok = True
-    if match_regex:
-        regex_ok = re.search(match_regex, resp.text) is not None
-
-    matched = status_ok and regex_ok
-    return TemplateCheckResult(
-        name=check.get("name", path),
-        matched=matched,
-        severity=check.get("severity", "info") if matched else "info",
-        detail=f"HTTP {resp.status_code} at {path}",
-    )
-
-
-def run_template(target: str, template_path: Path) -> list[TemplateCheckResult]:
-    template = _load_template(template_path)
-    results: list[TemplateCheckResult] = []
-    for check in template.get("checks", []):
-        check_type = check.get("type")
-        if check_type == "http-path":
-            results.append(_run_http_path_check(target, check))
-        else:
-            results.append(TemplateCheckResult(
-                name=check.get("name", "unknown"), matched=False,
-                severity="info", detail=f"unsupported check type: {check_type}",
-            ))
-    return results
-
 
 @register_command("template-scan")
 def cmd_template_scan(session: Session, args: list[str]) -> None:
@@ -255,16 +195,18 @@ def cmd_template_scan(session: Session, args: list[str]) -> None:
         return
 
     try:
-        results = run_template(session.target, template_path)
-    except (yaml.YAMLError, ValueError) as e:
-        console.print(f"[red]Invalid template:[/red] {e}")
+        with console.status("[cyan]Running template checks...[/cyan]"):
+            results = run_template(session.target, template_path)
+    except TemplateError as exc:
+        console.print(f"[red]Invalid template:[/red] {exc}")
         return
 
     table = Table(title=f"Template Scan — {template_path.name}")
     table.add_column("Check", style="bold")
-    table.add_column("Matched")
+    table.add_column("Flagged")
     table.add_column("Detail", style="dim")
-    for r in results:
-        matched_style = "red bold" if r.matched else "dim"
-        table.add_row(r.name, f"[{matched_style}]{r.matched}[/{matched_style}]", r.detail)
+    for item in results:
+        flagged_style = "red bold" if item.flagged else "dim"
+        table.add_row(item.name, f"[{flagged_style}]{item.flagged}[/{flagged_style}]", item.detail)
     console.print(table)
+    session.state["last_template_results"] = results

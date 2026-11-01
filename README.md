@@ -6,7 +6,7 @@
   |_| |_| \_\/_/   \_\___|_| \_|
 
 Threat Response & Automated Intelligence Network
-        Purple Team CLI  |  v0.1.0-dev
+        Purple Team CLI  |  v1.0.0
 ```
 
 # TRAIN Framework
@@ -73,7 +73,7 @@ single interactive terminal interface (TUI).
 | `crypto_utils.py` | Python | Base64/Hex/URL encode-decode + hashing |
 | `phish_awareness.py` | Python | Interactive phishing-recognition training with 44 examples across 4 difficulty levels |
 | `dir_brute.py` | Python | Web directory/file discovery (gobuster/dirb-style) |
-| `report_generator.py` | Python | Aggregates all session findings into a single HTML report |
+| `report_generator.py` | Python | Session findings as JSON, interactive HTML, and a styled PDF |
 | `wifi_audit.py` | Python | Passive wireless network scan, router management-port audit, and LAN host discovery |
 | `siem_dashboard.py` | Python | Live-updating SIEM-style dashboard over a log file |
 | `secure_chat.py` | Python | End-to-end encrypted terminal-to-terminal chat over TCP |
@@ -84,75 +84,85 @@ single interactive terminal interface (TUI).
 ## 🏗 Architecture
 
 ```
-                    ┌─────────────────────┐
-                    │   main.py (entry)     │
-                    └──────────┬───────────┘
-                               │
-                    ┌──────────▼───────────┐
-                    │  core/tui_engine.py   │  ← Rich/Prompt_Toolkit TUI
-                    │  (command registry)    │
-                    └──────────┬───────────┘
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                 │
-    ┌─────────▼──────┐ ┌───────▼────────┐ ┌──────▼───────┐
-    │  core/bridge.py │ │ modules/*.py    │ │ native_modules│
-    │  (Python↔native)│ │ (13 Python      │ │ (C++ / Go)    │
-    │                 │ │  modules)        │ │               │
-    └─────────┬──────┘ └────────────────┘ └──────┬────────┘
-              │                                    │
-              └──────────── subprocess + JSON ──────┘
+                         ┌──────────────────────┐
+                         │  main.py             │
+                         │  TUI  or  -c command │
+                         └──────────┬───────────┘
+                                    │
+                         ┌──────────▼───────────┐
+                         │  core/tui_engine.py  │
+                         │  menu, status, doctor│
+                         └──────────┬───────────┘
+                                    │
+          ┌─────────────────────────┼──────────────────────────┐
+          │                         │                          │
+┌─────────▼────────┐    ┌───────────▼──────────┐    ┌──────────▼─────────┐
+│ core/async_http  │    │ core/findings.py     │    │ core/bridge.py     │
+│ timeouts, cap 8  │    │ one finding list     │    │ JSON contract      │
+└─────────┬────────┘    └───────────┬──────────┘    └──────────┬─────────┘
+          │                         │                          │
+          │              ┌──────────▼──────────┐               │ subprocess
+┌─────────▼────────┐     │ modules/*.py        │     ┌─────────▼──────────┐
+│ templates/parser │     │ plugins/ + contract │     │ native_modules/    │
+│ http-path/header │     │                     │     │ scanner.cpp        │
+└──────────────────┘     └──────────┬──────────┘     │ sniffer.go         │
+                                    │                └────────────────────┘
+                         ┌──────────▼──────────┐
+                         │ JSON + HTML + PDF   │
+                         └─────────────────────┘
 ```
 
-The Python TUI handles central orchestration; the C++ (`scanner.cpp`) and
-Go (`sniffer.go`) modules are compiled as separate binaries and invoked
-as subprocesses through `core/bridge.py`, with results returned as JSON.
+`main.py` registers every module and either opens the Rich / prompt_toolkit
+TUI or runs a single command (`python main.py -c "doctor"`). Defensive HTTP
+checks share `core/async_http.py` (asyncio + aiohttp) with a hard cap of 8
+concurrent requests, bounded timeouts, and a response-size limit.
+`templates/parser.py` accepts only `http-path` and `http-header` checks.
+`core/plugin_contract.py` is the plugin interface: name, description, ports,
+`run_check`, and a timeout the loader caps at 8 seconds. `core/bridge.py`
+validates scanner JSON and refuses thread counts above 200. The C++ and Go
+programs stay separate binaries; their stdout is still JSON.
 
 ---
 
 ## 🚀 Installation
 
 ### Requirements
-- Linux (Kali / Ubuntu / Debian recommended) or WSL2
-- Python 3.10+
-- `g++` (with C++17 support)
-- Go 1.20+
-- `libpcap-dev`
+- Python 3.10+ on Windows, Linux, or WSL2
+- The Python TUI, reports, compliance checks, vault, and phishing quiz run
+  without the native binaries
+- `g++` (C++17), Go 1.20+, and `libpcap-dev` only if you build the Linux/WSL
+  scanner and sniffer (`scanner.cpp` uses POSIX sockets)
 
 ### Steps
 
 ```bash
-# 1. Clone the repo
 git clone https://github.com/umidguluzada/train-framework.git
 cd train-framework
+python -m pip install -r requirements.txt
+python main.py
+```
 
-# 2. Install system dependencies
+On Linux or WSL, the optional native binaries:
+
+```bash
 sudo apt update
-sudo apt install -y build-essential golang-go libpcap-dev redis-server
-
-# 3. Install Python dependencies
-pip install -r requirements.txt --break-system-packages
-
-# 4. Compile the C++ port scanner
+sudo apt install -y build-essential golang-go libpcap-dev
 cd native_modules
 g++ -std=c++17 -O2 -pthread scanner.cpp -o train_scanner
-
-# 5. Compile the Go IDS/IPS engine
 go mod init train_sniffer
 go get github.com/google/gopacket
 go build -o train_sniffer sniffer.go
 cd ..
-
-# 6. Run it
-python3 main.py
+python main.py -c "doctor"
 ```
 
 > IDS/IPS (`sniff`/`ids-run`) requires root privileges to capture live
 > packets: `sudo python3 main.py`.
 
 > 💡 **Tip:** every command supports `<command> --help` (or `-h`) to show
-> its own usage details, e.g. `scan --help`, `dir-brute --help`,
-> `vault-add -h`.
+> its own usage details, e.g. `scan --help`, `template-scan --help`,
+> `vault-add -h`. `python main.py -c "doctor"` runs one command without
+> staying in the prompt.
 
 ---
 
@@ -160,17 +170,30 @@ python3 main.py
 
 ### Core commands
 
+From a shell, before entering the TUI:
+
+```bash
+python main.py --version
+python main.py -c "doctor"
+python main.py -c "help"
+python main.py
+```
+
 | Command | Description |
 |---|---|
+| `menu` | Prints command groups and prompts for one command to run. |
 | `set target <IP/URL>` | Sets the target for the current session. Most other commands fall back to this value if no target is given directly. |
-| `status` | Shows the current session state (target, verbose mode). |
+| `status` | Shows target, command count, recorded findings, and whether the native binaries are built. |
+| `doctor` | Checks Python 3.10+, third-party libraries, native binaries, and plugin load errors. |
 | `help` | Lists all available commands. |
 | `exit` / `quit` | Exits the program. |
 
 **Examples:**
 ```
+menu
 set target 192.168.1.10
 status
+doctor
 scan --help          # any command supports --help for its own usage
 ```
 
@@ -319,8 +342,8 @@ phish-quiz all critical
 
 | Command | Description |
 |---|---|
-| `generate-report [output.html]` | Aggregates every finding gathered this session (port scan, TSE, web audit, dir-brute, compliance, CVE, logs, MITRE mapping, C2 beaconing) into a single self-contained HTML report, including an Executive Summary with a weighted risk score (High/Medium/Low). Default output: `train_report.html`. |
-| `generate-pdf-report [output.pdf]` | Exports the same Executive Summary (risk score, High/Medium/Low counts) plus compliance/TSE/MITRE findings tables as a standalone PDF, for sharing with people who'd rather not open an HTML file. Default output: `train_report.pdf`. |
+| `generate-report [name.html]` | Writes three files from one finding list: `train_report.json`, an interactive `train_report.html` (severity buttons and a text filter), and a styled `train_report.pdf`. Passing `my-audit.html` uses that stem for all three. |
+| `generate-pdf-report [output.pdf]` | Writes only the PDF summary (risk counts and the findings table). Default: `train_report.pdf`. |
 
 **Examples:**
 ```
@@ -393,11 +416,15 @@ scan 1 100
 run-tse                 # built-in checks AND every matching plugin run together
 ```
 
-**Write your own:** a plugin file needs `PLUGIN_NAME` (str), `PLUGIN_PORTS`
-(a list of ports, or the string `"all"` to run on every port TSE checks),
-and a `run_check(target, port)` function returning `None` or a dict with
-`result`/`severity`/`detail` keys. ⚠️ Plugins are arbitrary Python code
-executed in-process — only add plugins you wrote yourself or fully trust.
+**Write your own:** see `core/plugin_contract.py` and
+`plugins/example_http_title.py`. Required: `PLUGIN_NAME` (str),
+`PLUGIN_PORTS` (a list of ports, or `"all"`), and
+`run_check(target, port)` returning `None` or a dict with
+`result` / `severity` (`info`, `warning`, or `finding`) / `detail`.
+Optional: `PLUGIN_DESCRIPTION` and `PLUGIN_TIMEOUT` (the loader caps
+timeout at 8 seconds and runs plugins one at a time). Unknown severities
+are stored as `info`. Plugins are arbitrary Python executed in-process —
+only add plugins you wrote or have fully read.
 
 ---
 
@@ -453,14 +480,19 @@ executed in-process — only add plugins you wrote yourself or fully trust.
 ## 📁 Project Structure
 
 ```
-train_framework/
-├── main.py                      # Entry point
-├── requirements.txt             # Python dependencies
-├── README.md                    # This file
+train-framework/
+├── main.py                      # Entry point (TUI or -c)
+├── requirements.txt             # Exact Python dependency versions
+├── README.md
+├── tests/test_platform.py       # Offline tests for the platform layer
 │
 ├── core/
-│   ├── tui_engine.py            # TUI, banner, command registry
-│   └── bridge.py                # Python ↔ C++/Go bridge
+│   ├── version.py               # Release version
+│   ├── tui_engine.py            # TUI, menu, status, doctor
+│   ├── async_http.py            # Capped asyncio/aiohttp client
+│   ├── findings.py              # Shared finding list for reports
+│   ├── plugin_contract.py       # Plugin interface
+│   └── bridge.py                # Python ↔ C++/Go JSON bridge
 │
 ├── native_modules/
 │   ├── scanner.cpp              # C++ port scanner
@@ -468,9 +500,10 @@ train_framework/
 │   └── rules.conf               # Snort-style signature rules
 │
 ├── templates/
-│   └── example-template.yaml    # Sample YAML audit template
+│   ├── parser.py                # http-path and http-header templates
+│   └── example-template.yaml
 │
-├── plugins/                      # User-extensible TSE checks (Nmap-NSE-style)
+├── plugins/                      # User-extensible TSE checks
 │   ├── example_http_title.py
 │   ├── dns_banner.py
 │   ├── rdp_exposure.py
@@ -486,24 +519,15 @@ train_framework/
 │
 └── modules/
     ├── web_auditor.py
-    ├── crypto_utils.py
-    ├── pass_auditor.py
     ├── script_engine.py
     ├── cve_lookup.py
     ├── compliance.py
     ├── log_engine.py
     ├── threat_hunter.py
     ├── osint_auditor.py
-    ├── api_tester.py
-    ├── binary_analyzer.py
-    ├── vault_manager.py
-    ├── phish_awareness.py
-    ├── dir_brute.py
-    └── report_generator.py
-    └── wifi_audit.py
-    └── siem_dashboard.py
-    └── secure_chat.py
-    └── plugin_engine.py
+    ├── report_generator.py
+    ├── plugin_engine.py
+    └── ...                  # vault, phishing quiz, wifi, SIEM, chat, and the rest
 ```
 
 ---

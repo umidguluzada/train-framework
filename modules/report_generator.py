@@ -15,17 +15,16 @@ not run any new scans or checks itself.
 from __future__ import annotations
 
 import html
-from datetime import datetime
+import json
 from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
 
+from core.findings import ReportDocument, collect_report
 from core.tui_engine import Session, register_command
 
 console = Console()
-
-DEFAULT_OUTPUT = "train_report.html"
 
 CSS = """
 body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 1000px;
@@ -48,6 +47,11 @@ code { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 0.9
             border-radius: 8px; padding: 16px; }
 .risk-number { font-size: 2em; font-weight: 700; }
 .risk-label { color: #8b949e; font-size: 0.85em; margin-top: 4px; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.toolbar button, .toolbar input { background: #0d1117; color: #c9d1d9; border: 1px solid #30363d;
+  border-radius: 6px; padding: 6px 10px; }
+.toolbar button.active { border-color: #58a6ff; color: #58a6ff; }
+tr[hidden] { display: none; }
 """
 
 
@@ -203,95 +207,82 @@ def _section_dirbrute(session: Session) -> str:
     )
 
 
-def _compute_risk_summary(session: Session) -> dict:
-    """
-    Aggregates severities across every finding this session gathered into
-    simple High/Medium/Low counts and an overall 0-100 risk score. This is
-    a straightforward weighted count (not a formal CVSS-style model) meant
-    to give a quick, at-a-glance sense of exposure - the detailed findings
-    below remain the source of truth.
-    """
-    high = medium = low = 0
-
-    compliance_report = session.state.get("last_compliance_report")
-    if compliance_report:
-        for c in compliance_report.checks:
-            if c.status == "fail":
-                high += 1
-            elif c.status == "warn":
-                medium += 1
-
-    tse_report = session.state.get("last_tse_report")
-    if tse_report:
-        for f in tse_report.findings:
-            if f.severity == "finding":
-                high += 1
-            elif f.severity == "warning":
-                medium += 1
-
-    web_audit = session.state.get("last_web_audit")
-    if web_audit:
-        medium += len(getattr(web_audit, "headers_missing", []) or [])
-        high += len(getattr(web_audit, "exposed_paths", []) or [])
-
-    cves = session.state.get("last_cve_results") or []
-    for c in cves:
-        sev = (c.severity or "").upper()
-        if sev in ("CRITICAL", "HIGH"):
-            high += 1
-        elif sev == "MEDIUM":
-            medium += 1
-        else:
-            low += 1
-
-    log_report = session.state.get("last_log_report")
-    if log_report and log_report.brute_force_candidates:
-        high += len(log_report.brute_force_candidates)
-
-    beacon_report = session.state.get("last_beacon_report")
-    if beacon_report and beacon_report.candidates:
-        high += len(beacon_report.candidates)
-
-    brute_dir = session.state.get("last_dir_brute")
-    if brute_dir:
-        low += len(getattr(brute_dir, "found", []) or [])
-
-    total_weighted = high * 10 + medium * 4 + low * 1
-    # Compress into a 0-100 scale with diminishing returns past a handful
-    # of findings, so the score stays readable even on a busy session.
-    score = min(100, total_weighted)
-
-    if score >= 70 or high >= 5:
-        level, level_style = "HIGH", "sev-high"
-    elif score >= 30 or high >= 1 or medium >= 4:
-        level, level_style = "MEDIUM", "sev-medium"
-    else:
-        level, level_style = "LOW", "sev-low" if (high or medium or low) else "sev-pass"
-
-    return {
-        "high": high, "medium": medium, "low": low,
-        "score": score, "level": level, "level_style": level_style,
-    }
+def _level_class(level: str) -> str:
+    return {"HIGH": "sev-high", "MEDIUM": "sev-medium", "LOW": "sev-low"}.get(level, "sev-pass")
 
 
-def _section_executive_summary(session: Session) -> str:
-    r = _compute_risk_summary(session)
+def _section_executive_summary(report: ReportDocument) -> str:
+    risk = report.risk
+    level_class = _level_class(risk["level"])
     return f"""<div class="section exec-summary">
 <h2>Executive Summary</h2>
 <div class="risk-grid">
-  <div class="risk-box"><div class="risk-number {r['level_style']}">{r['level']}</div><div class="risk-label">Overall Risk</div></div>
-  <div class="risk-box"><div class="risk-number sev-high">{r['high']}</div><div class="risk-label">High</div></div>
-  <div class="risk-box"><div class="risk-number sev-medium">{r['medium']}</div><div class="risk-label">Medium</div></div>
-  <div class="risk-box"><div class="risk-number sev-pass">{r['low']}</div><div class="risk-label">Low</div></div>
+  <div class="risk-box"><div class="risk-number {level_class}">{_esc(risk['level'])}</div><div class="risk-label">Overall Risk ({_esc(risk['score'])})</div></div>
+  <div class="risk-box"><div class="risk-number sev-high">{_esc(risk['high'])}</div><div class="risk-label">High</div></div>
+  <div class="risk-box"><div class="risk-number sev-medium">{_esc(risk['medium'])}</div><div class="risk-label">Medium</div></div>
+  <div class="risk-box"><div class="risk-number sev-pass">{_esc(risk['low'])}</div><div class="risk-label">Low</div></div>
 </div>
-<p class="empty">Risk score is a simple weighted count of this session's findings
-(High x10 + Medium x4 + Low x1, capped at 100) - a quick indicator, not a formal
-CVSS-style assessment. See the detailed sections below for the actual findings.</p>
+<p class="empty">Risk score is a weighted count of this session's findings
+(High x10 + Medium x4 + Low x1, capped at 100). Informational rows are listed
+below and are not added to the score.</p>
 </div>"""
 
 
-SECTION_BUILDERS = [
-    _section_executive_summary,
+def _section_findings(report: ReportDocument) -> str:
+    if not report.findings:
+        rows = '<tr data-sev="info"><td colspan="4" class="empty">No findings recorded this session.</td></tr>'
+    else:
+        rows = "".join(
+            "<tr data-sev=\"{sev}\"><td>{source}</td><td class=\"{cls}\">{sev}</td><td>{title}</td><td>{detail}</td></tr>".format(
+                sev=_esc(item.severity),
+                source=_esc(item.source),
+                cls=_sev_class(item.severity),
+                title=_esc(item.title),
+                detail=_esc(item.detail),
+            )
+            for item in report.findings
+        )
+    return f"""<div class="section">
+<h2>Findings</h2>
+<div class="toolbar">
+  <button type="button" class="active" data-filter="all">All</button>
+  <button type="button" data-filter="high">High</button>
+  <button type="button" data-filter="medium">Medium</button>
+  <button type="button" data-filter="low">Low</button>
+  <button type="button" data-filter="info">Info</button>
+  <input id="finding-filter" type="search" placeholder="Filter findings" aria-label="Filter findings">
+</div>
+<table id="findings"><thead><tr><th>Source</th><th>Severity</th><th>Title</th><th>Detail</th></tr></thead>
+<tbody>{rows}</tbody></table>
+</div>
+<script>
+(function () {{
+  const input = document.getElementById("finding-filter");
+  const buttons = document.querySelectorAll("[data-filter]");
+  const rows = document.querySelectorAll("#findings tbody tr");
+  let active = "all";
+  function apply() {{
+    const query = (input.value || "").toLowerCase();
+    rows.forEach(function (row) {{
+      const sevOk = active === "all" || row.dataset.sev === active;
+      const textOk = !query || row.innerText.toLowerCase().indexOf(query) !== -1;
+      row.hidden = !(sevOk && textOk);
+    }});
+  }}
+  buttons.forEach(function (button) {{
+    button.addEventListener("click", function () {{
+      buttons.forEach(function (item) {{ item.classList.remove("active"); }});
+      button.classList.add("active");
+      active = button.dataset.filter;
+      apply();
+    }});
+  }});
+  input.addEventListener("input", apply);
+}})();
+</script>"""
+
+
+DETAIL_BUILDERS = [
     _section_scan,
     _section_tse,
     _section_web,
@@ -305,43 +296,71 @@ SECTION_BUILDERS = [
 
 
 def build_html_report(session: Session) -> str:
-    sections_html = "\n".join(builder(session) for builder in SECTION_BUILDERS)
-    target = _esc(session.target or "not set")
-    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    report = collect_report(session)
+    sections_html = "\n".join([
+        _section_executive_summary(report),
+        _section_findings(report),
+        *(builder(session) for builder in DETAIL_BUILDERS),
+    ])
+    target = _esc(report.target or "not set")
+    generated_at = _esc(report.generated_at)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TRAIN Framework — Pentest Report</title>
+<title>TRAIN Framework — Session Report</title>
 <style>{CSS}</style>
 </head>
 <body>
 <h1>TRAIN Framework — Session Report</h1>
 <div class="meta">Target: <code>{target}</code> &nbsp;|&nbsp; Generated: {generated_at}</div>
 {sections_html}
-<div class="meta" style="margin-top:40px;">Generated by TRAIN Framework (Threat Response &amp; Automated Intelligence Network).</div>
+<div class="meta" style="margin-top:40px;">Generated by TRAIN Framework { _esc(report.version) } (Threat Response &amp; Automated Intelligence Network).</div>
 </body>
 </html>"""
 
 
+def _report_paths(arg: str | None) -> tuple[Path, Path, Path]:
+    if not arg:
+        base = Path("train_report")
+    else:
+        path = Path(arg)
+        base = path.with_suffix("") if path.suffix.lower() in {".html", ".json", ".pdf"} else path
+    return base.with_suffix(".html"), base.with_suffix(".json"), base.with_suffix(".pdf")
+
+
+def write_json_report(session: Session, output_path: Path) -> ReportDocument:
+    report = collect_report(session)
+    output_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+    session.state["last_report"] = report
+    return report
+
+
 @register_command("generate-report")
 def cmd_generate_report(session: Session, args: list[str]) -> None:
-    """Usage: generate-report [output_path.html]   (default: train_report.html)"""
-    output_path = Path(args[0]) if args else Path(DEFAULT_OUTPUT)
-
-    console.print("[cyan]Aggregating this session's findings into a report...[/cyan]")
-    report_html = build_html_report(session)
-
+    """Usage: generate-report [name.html]   Writes HTML, JSON, and PDF (default: train_report.*)."""
+    html_path, json_path, pdf_path = _report_paths(args[0] if args else None)
+    console.print("[cyan]Aggregating this session's findings...[/cyan]")
     try:
-        output_path.write_text(report_html, encoding="utf-8")
-    except OSError as e:
-        console.print(f"[red]Could not write report:[/red] {e}")
+        html_path.write_text(build_html_report(session), encoding="utf-8")
+        write_json_report(session, json_path)
+    except OSError as exc:
+        console.print(f"[red]Could not write report:[/red] {exc}")
         return
 
+    pdf_note = f"PDF written to [bold]{pdf_path.resolve()}[/bold]"
+    try:
+        _build_pdf_report(session, pdf_path)
+    except ImportError:
+        pdf_note = "PDF skipped. Install reportlab to write the PDF summary."
+    except Exception as exc:  # noqa: BLE001 - keep HTML and JSON if PDF rendering fails
+        pdf_note = f"PDF skipped: {exc}"
+
     console.print(Panel(
-        f"Report written to [bold]{output_path.resolve()}[/bold]\n"
-        f"Open it in a browser to view.",
+        f"HTML written to [bold]{html_path.resolve()}[/bold]\n"
+        f"JSON written to [bold]{json_path.resolve()}[/bold]\n"
+        f"{pdf_note}",
         title="Report Generated", border_style="green",
     ))
 
@@ -355,97 +374,108 @@ def _build_pdf_report(session: Session, output_path: Path) -> None:
         SimpleDocTemplate, Paragraph, Spacer, Table as RLTable, TableStyle,
     )
 
+    report = collect_report(session)
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("TrainTitle", parent=styles["Title"], textColor=colors.HexColor("#1a1a2e"))
-    heading_style = ParagraphStyle("TrainHeading", parent=styles["Heading2"], textColor=colors.HexColor("#16213e"),
-                                    spaceBefore=16, spaceAfter=8)
+    title_style = ParagraphStyle("TrainTitle", parent=styles["Title"], textColor=colors.HexColor("#0f2744"))
+    heading_style = ParagraphStyle(
+        "TrainHeading", parent=styles["Heading2"], textColor=colors.HexColor("#0f2744"),
+        spaceBefore=14, spaceAfter=8,
+    )
     normal = styles["BodyText"]
+    cell_style = ParagraphStyle("Cell", parent=styles["BodyText"], fontSize=8, leading=10)
+    header_style = ParagraphStyle(
+        "CellHeader", parent=cell_style, textColor=colors.white, fontName="Helvetica-Bold",
+    )
 
-    doc = SimpleDocTemplate(str(output_path), pagesize=letter,
-                             topMargin=0.7 * inch, bottomMargin=0.7 * inch)
+    def _on_page(canvas, doc) -> None:
+        canvas.saveState()
+        canvas.setFillColor(colors.HexColor("#0f2744"))
+        canvas.rect(0, letter[1] - 36, letter[0], 36, fill=1, stroke=0)
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 10)
+        canvas.drawString(48, letter[1] - 23, f"TRAIN Framework  {report.version}")
+        canvas.setFillColor(colors.HexColor("#5c6b7a"))
+        canvas.setFont("Helvetica", 8)
+        canvas.drawString(48, 24, "Session summary")
+        canvas.drawRightString(letter[0] - 48, 24, f"Page {doc.page}")
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        str(output_path), pagesize=letter,
+        topMargin=0.8 * inch, bottomMargin=0.7 * inch,
+        leftMargin=0.6 * inch, rightMargin=0.6 * inch,
+    )
+    level_color = {
+        "HIGH": colors.HexColor("#c0392b"),
+        "MEDIUM": colors.HexColor("#d68910"),
+        "LOW": colors.HexColor("#1e8449"),
+    }.get(report.risk["level"], colors.HexColor("#1e8449"))
+
     story = [
-        Paragraph("TRAIN Framework — Pentest Report", title_style),
-        Paragraph(f"Target: {session.target or 'not set'}  |  "
-                  f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", normal),
-        Spacer(1, 16),
+        Paragraph("Session summary", title_style),
+        Paragraph(
+            f"Target: {report.target or 'not set'}<br/>Generated: {report.generated_at}",
+            normal,
+        ),
+        Spacer(1, 12),
+        Paragraph("Risk", heading_style),
     ]
-
-    # Executive summary as a table.
-    r = _compute_risk_summary(session)
-    level_color = {"HIGH": colors.HexColor("#c0392b"), "MEDIUM": colors.HexColor("#d68910"),
-                   "LOW": colors.HexColor("#27ae60")}.get(r["level"], colors.grey)
-    story.append(Paragraph("Executive Summary", heading_style))
-    summary_data = [["Overall Risk", "High", "Medium", "Low"],
-                     [r["level"], str(r["high"]), str(r["medium"]), str(r["low"])]]
-    summary_table = RLTable(summary_data, colWidths=[1.5 * inch] * 4)
-    summary_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eeeeee")),
+    summary = RLTable(
+        [
+            ["Overall", "Score", "High", "Medium", "Low"],
+            [
+                report.risk["level"], str(report.risk["score"]),
+                str(report.risk["high"]), str(report.risk["medium"]), str(report.risk["low"]),
+            ],
+        ],
+        colWidths=[1.4 * inch] * 5,
+    )
+    summary.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f2744")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("TEXTCOLOR", (0, 1), (0, 1), level_color),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTNAME", (0, 1), (0, 1), "Helvetica-Bold"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#f4f7fb")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d7de")),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
-    story.append(summary_table)
+    story.append(summary)
     story.append(Spacer(1, 12))
+    story.append(Paragraph("Findings", heading_style))
 
-    def add_finding_table(title: str, headers: list[str], rows: list[list[str]]) -> None:
-        story.append(Paragraph(title, heading_style))
-        if not rows:
-            story.append(Paragraph("No findings.", normal))
-            return
-
-        cell_style = ParagraphStyle("Cell", parent=styles["BodyText"], fontSize=8, leading=10)
-        header_style = ParagraphStyle("CellHeader", parent=cell_style, textColor=colors.white,
-                                        fontName="Helvetica-Bold")
-
-        # Wrap every cell's text in a Paragraph so long content wraps
-        # inside the cell instead of overflowing and overlapping neighbors.
-        wrapped_header = [Paragraph(str(h), header_style) for h in headers]
-        wrapped_rows = [[Paragraph(str(cell), cell_style) for cell in row] for row in rows]
-        data = [wrapped_header] + wrapped_rows
-
-        col_width = 6.4 * inch / len(headers)
-        t = RLTable(data, colWidths=[col_width] * len(headers), repeatRows=1)
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1a1a2e")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+    if not report.findings:
+        story.append(Paragraph("No findings recorded this session.", normal))
+    else:
+        header = [Paragraph(text, header_style) for text in ("Source", "Severity", "Title", "Detail")]
+        body = [[
+            Paragraph(item.source, cell_style),
+            Paragraph(item.severity, cell_style),
+            Paragraph(item.title, cell_style),
+            Paragraph(item.detail[:240], cell_style),
+        ] for item in report.findings]
+        table = RLTable([header] + body, colWidths=[1.1 * inch, 0.8 * inch, 2.2 * inch, 3.1 * inch], repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f2744")),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#d0d7de")),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("TOPPADDING", (0, 0), (-1, -1), 4),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f4f7fb")]),
         ]))
-        story.append(t)
-        story.append(Spacer(1, 10))
+        story.append(table)
 
-    compliance_report = session.state.get("last_compliance_report")
-    if compliance_report:
-        rows = [[c.check_id, c.description, c.status.upper(), c.detail[:60]] for c in compliance_report.checks]
-        add_finding_table("Compliance Audit", ["ID", "Check", "Status", "Detail"], rows)
-
-    tse_report = session.state.get("last_tse_report")
-    if tse_report and tse_report.findings:
-        rows = [[str(f.port), f.check, f.result[:30], f.detail[:50]] for f in tse_report.findings]
-        add_finding_table("TSE Findings", ["Port", "Check", "Result", "Detail"], rows)
-
-    mitre_report = session.state.get("last_mitre_report")
-    if mitre_report and mitre_report.mappings:
-        rows = [[m.technique_id, m.tactic, m.evidence[:60]] for m in mitre_report.mappings]
-        add_finding_table("MITRE ATT&CK Mapping", ["Technique", "Tactic", "Evidence"], rows)
-
-    doc.build(story)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
 
 
 @register_command("generate-pdf-report")
 def cmd_generate_pdf_report(session: Session, args: list[str]) -> None:
     """
     Usage: generate-pdf-report [output_path.pdf]   (default: train_report.pdf)
-    Exports an Executive Summary (risk score, High/Medium/Low counts) plus
-    compliance/TSE/MITRE findings tables as a standalone PDF - useful for
-    sharing with people who'd rather not open an HTML file.
+    Writes the styled PDF summary: risk counts plus the normalized findings table.
     """
     output_path = Path(args[0]) if args else Path("train_report.pdf")
 

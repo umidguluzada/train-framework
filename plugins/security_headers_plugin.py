@@ -10,6 +10,7 @@ misconfiguration distinct from the header checks in web_auditor.py.
 import requests
 
 PLUGIN_NAME = "CORS Misconfiguration Check"
+PLUGIN_DESCRIPTION = "Reports if the server reflects an arbitrary Origin header."
 PLUGIN_PORTS = [80, 443, 8080, 8443]
 
 

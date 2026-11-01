@@ -18,6 +18,7 @@ publish for anyone who asks.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import time
@@ -57,30 +58,51 @@ class DNSResult:
 
 def run_dns_enum(domain: str) -> DNSResult:
     try:
-        import dns.resolver  # local import: optional dependency (dnspython)
+        import dns.asyncresolver  # local import: optional dependency (dnspython)
+        import dns.resolver
     except ImportError as e:
         raise RuntimeError(
             "dnspython is required for audit-osint. Install with: pip install dnspython"
         ) from e
 
-    result = DNSResult(domain=domain)
-    resolver = dns.resolver.Resolver()
-    resolver.timeout = 5
-    resolver.lifetime = 5
+    async def _resolve_all() -> DNSResult:
+        resolver = dns.asyncresolver.Resolver()
+        resolver.timeout = 5
+        resolver.lifetime = 5
+        limit = asyncio.Semaphore(4)
+        resolved = DNSResult(domain=domain)
 
-    for record_type in DNS_RECORD_TYPES:
-        try:
-            answers = resolver.resolve(domain, record_type)
-            result.records[record_type] = [str(r).strip() for r in answers]
-        except dns.resolver.NoAnswer:
-            continue
-        except dns.resolver.NXDOMAIN:
-            result.errors["*"] = f"Domain does not exist: {domain}"
-            break
-        except Exception as e:  # noqa: BLE001 - dnspython raises several exception types
-            result.errors[record_type] = str(e)
+        async def one(record_type: str) -> tuple[str, list[str], str | None]:
+            async with limit:
+                try:
+                    answers = await asyncio.wait_for(resolver.resolve(domain, record_type), timeout=6)
+                    return record_type, [str(record).strip() for record in answers], None
+                except dns.resolver.NoAnswer:
+                    return record_type, [], None
+                except dns.resolver.NXDOMAIN:
+                    return record_type, [], "nxdomain"
+                except Exception as exc:  # noqa: BLE001 - dnspython raises several exception types
+                    return record_type, [], str(exc)
 
-    return result
+        def _store(record_type: str, values: list[str], error: str | None) -> bool:
+            if error == "nxdomain":
+                resolved.errors["*"] = f"Domain does not exist: {domain}"
+                return False
+            if error:
+                resolved.errors[record_type] = error
+            elif values:
+                resolved.records[record_type] = values
+            return True
+
+        first, *rest = DNS_RECORD_TYPES
+        record_type, values, error = await one(first)
+        if _store(record_type, values, error):
+            for record_type, values, error in await asyncio.gather(*(one(kind) for kind in rest)):
+                if not _store(record_type, values, error):
+                    break
+        return resolved
+
+    return asyncio.run(_resolve_all())
 
 
 def _render_dns_result(result: DNSResult) -> None:

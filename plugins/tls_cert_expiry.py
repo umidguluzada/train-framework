@@ -11,6 +11,7 @@ import ssl
 from datetime import datetime, timezone
 
 PLUGIN_NAME = "TLS Certificate Expiry Check"
+PLUGIN_DESCRIPTION = "Reports how long the presented certificate remains valid."
 PLUGIN_PORTS = [443, 8443]
 
 

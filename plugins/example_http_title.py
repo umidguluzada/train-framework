@@ -1,10 +1,11 @@
 """
 TRAIN Framework - example plugin: HTTP page title fetcher.
 
-This is a template showing the plugin convention. Copy this file, rename
-it, and change PLUGIN_NAME/PLUGIN_PORTS/run_check() to build your own
-TSE check - it will be picked up automatically the next time 'run-tse'
-or 'list-plugins' runs, no other code changes needed.
+This is a template showing the plugin convention in core/plugin_contract.py.
+Copy this file, rename it, and set PLUGIN_NAME, PLUGIN_DESCRIPTION,
+PLUGIN_PORTS, and run_check(). Optional PLUGIN_TIMEOUT is capped by the
+loader. The next 'run-tse' or 'list-plugins' picks the file up with no
+other code changes.
 
 This example check sends a single, harmless GET request to the target
 and reports the HTML <title> it finds - useful for quickly identifying
@@ -16,6 +17,7 @@ import re
 import requests
 
 PLUGIN_NAME = "HTTP Page Title"
+PLUGIN_DESCRIPTION = "Reads the HTML title of one page."
 PLUGIN_PORTS = "all"  # tries every port TSE checks; harmlessly reports
                        # "unreachable" on non-HTTP ports (e.g. SSH, FTP)
 
